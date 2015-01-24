@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Kill Report - Mafia</title>
+</head>
+<body>
+
+<form action="/kill-report/" method="post">
+	{% csrf_token %}
+	{{ form }}
+	<input type="submit" value="Submit" />
+</form>
+
+
+
+</body>
+</html>

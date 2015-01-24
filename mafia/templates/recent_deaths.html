@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Recent Deaths - Mafia</title>
+</head>
+<body>
+<table border="1">
+    <tr>
+        <th>Killed</th>
+        <th>Where</th>
+        <th>When</th>
+        {%  if god %}
+            <th>By whom</th>
+        {%  endif %}
+    </tr>
+    {% for death in deaths %}
+        <tr>
+            <td>{{ death.murderee.user.username }}</td>
+            <td>Wonderland</td>
+            <td>{{ death.when|date:"M d, P" }}</td>
+            {% if god %}
+                <td>{{ death.murderer.user.username }}</td>
+            {% endif %}
+        </tr>
+    {%  endfor %}
+</table>
+</body>
+</html>

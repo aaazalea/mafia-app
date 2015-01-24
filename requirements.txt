@@ -1,0 +1,5 @@
+Django==1.7.3
+django-extensions==1.4.9
+django-registration==1.0
+six==1.9.0
+wsgiref==0.1.2
