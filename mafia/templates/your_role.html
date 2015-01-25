@@ -6,14 +6,24 @@
 </head>
 <body>
 
-You are logged in as <b>{{ username }}</b>. Your role is <b>{{ role.name }}</b>.
+You are logged in as <b>{{ username }}</b> (<a href="/logout">Log out</a>). Your role is <b>{{ role.name }}</b>.
 
 <p>
     {{ role.description }}
 </p>
 <p>
-    {{ extra }}
+    {{ extra|safe }}
 </p>
 
+<p>
+    {% if alive %}
+        {% for link in links %}
+            <a href="{{ link.0 }}">{{ link.1 }}</a><br>
+        {% endfor %}
+    {% else %}
+        You're dead.
+    {% endif %}
+
+</p>
 </body>
 </html>

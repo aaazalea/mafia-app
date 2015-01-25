@@ -12,26 +12,35 @@ class DeathReportForm(forms.Form):
         initial=False, required=False,
         label="Was a kaboom used?")
     when = forms.IntegerField(label="How many minutes ago were you killed?")
+    where = forms.CharField(label='Where were you killed?')
 
 class KillReportForm(forms.Form):
     killed = forms.ModelChoiceField(
-        queryset=Player.objects.filter(game__active=True),
+        queryset=Player.objects.filter(game__active=True,death=None),
         label='Who did you kill?')
     kaboom = forms.BooleanField(initial=False, required=False,
                                 label="Was a kaboom used?")
     when = forms.IntegerField(label="How many minutes did this happen?")
+
+    where = forms.CharField(label='Where did this happen?')
+
     mtp = forms.BooleanField(initial=False, required=False,
                              label="Manipulate the press?")
-
+class DeathModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return obj.murderee.user.username
+class UserModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return obj.user.username
 class InvestigationForm(forms.Form):
-    death = forms.ModelChoiceField(
+    death = DeathModelChoiceField(
         queryset=Death.objects.filter(murderer__game__active=True),
         label="Which death would you like to investigate?",
-        to_field_name='murderee')
-    guess = forms.ModelChoiceField(
+        )
+    guess = UserModelChoiceField(
         queryset=Player.objects.filter(game__active=True),
         label="Whom would you like to investigate?"
     )
-    kind = forms.MultipleChoiceField(choices=Investigation.INVESTIGATION_KINDS,
-                                     label="What kind of investigation are you using? [choose one you're allowed to]",
+    investigation_type = forms.ChoiceField(choices=Investigation.INVESTIGATION_KINDS,
+                             label="What kind of investigation are you using? [choose one you're allowed to]"
                                      )

@@ -7,7 +7,11 @@ from random import shuffle
 
 
 admin.site.register(Player)
-admin.site.register(Role)
+
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description')
+
+admin.site.register(Role, RoleAdmin)
 
 class DeathAdmin(admin.ModelAdmin):
     list_display = ('murderee','murderer','when')
@@ -18,7 +22,7 @@ admin.site.register(Death,DeathAdmin)
 
 class PlayerInline(admin.TabularInline):
     model = Player
-    extra = 1
+    extra = 0
 
 
 def pair_gay_knights(modeladmin,request,queryset):
