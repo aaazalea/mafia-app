@@ -13,13 +13,6 @@ import os
 
 PRODUCTION = False
 
-if PRODUCTION:
-    BASE_URL = "/mafia"
-else:
-    BASE_URL = ""
-
-
-
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 TEMPLATE_DIRS = [os.path.join(BASE_DIR, 'templates')]
 

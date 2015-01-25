@@ -2,10 +2,13 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from models import *
+class PlayerModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        return obj.user.username
 
 
 class DeathReportForm(forms.Form):
-    killer = forms.ModelChoiceField(
+    killer = PlayerModelChoiceField(
         queryset=Player.objects.filter(game__active=True),
         label='Who killed you?')
     kaboom = forms.BooleanField(
@@ -15,8 +18,8 @@ class DeathReportForm(forms.Form):
     where = forms.CharField(label='Where were you killed?')
 
 class KillReportForm(forms.Form):
-    killed = forms.ModelChoiceField(
-        queryset=Player.objects.filter(game__active=True,death=None),
+    killed = PlayerModelChoiceField(
+        queryset=Player.objects.filter(game__active=True, death=None),
         label='Who did you kill?')
     kaboom = forms.BooleanField(initial=False, required=False,
                                 label="Was a kaboom used?")
@@ -29,15 +32,12 @@ class KillReportForm(forms.Form):
 class DeathModelChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         return obj.murderee.user.username
-class UserModelChoiceField(forms.ModelChoiceField):
-    def label_from_instance(self, obj):
-        return obj.user.username
 class InvestigationForm(forms.Form):
     death = DeathModelChoiceField(
         queryset=Death.objects.filter(murderer__game__active=True),
         label="Which death would you like to investigate?",
         )
-    guess = UserModelChoiceField(
+    guess = PlayerModelChoiceField(
         queryset=Player.objects.filter(game__active=True),
         label="Whom would you like to investigate?"
     )

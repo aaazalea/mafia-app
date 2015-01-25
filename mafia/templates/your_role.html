@@ -6,7 +6,7 @@
 </head>
 <body>
 
-You are logged in as <b>{{ username }}</b> (<a href="/logout">Log out</a>). Your role is <b>{{ role.name }}</b>.
+You are logged in as <b>{{ username }}</b> (<a href="{% url 'logout' %}">Log out</a>). Your role is <b>{{ role.name }}</b>.
 
 <p>
     {{ role.description }}
