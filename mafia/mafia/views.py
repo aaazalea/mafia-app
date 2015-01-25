@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect, HttpResponse
 from forms import DeathReportForm, InvestigationForm, KillReportForm
 from django.shortcuts import render
+from mafia.mafia.settings import BASE_URL
 from models import Player, Death, Game, Investigation
 
 
@@ -77,11 +78,11 @@ def your_role(request):
     username = request.user.username
     role = player.role
     additional_info = player.additional_info()
-    links = [("/death-report", "I died.")]
+    links = [(BASE_URL + "/death-report", "I died.")]
     if player.can_make_kills():
-        links.append(("/kill-report", "Report a kill you made"))
+        links.append((BASE_URL + "/kill-report", "Report a kill you made"))
     if player.can_investigate():
-        links.append(("/investigation-form", "Make an investigation"))
+        links.append((BASE_URL + "/investigation-form", "Make an investigation"))
     return render(request, 'your_role.html',
                   {'game': game,
                    'role': role,
@@ -103,11 +104,14 @@ def investigation_form(request):
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
                                                              investigation_type=form.data['investigation_type'])
                 if investigation.is_correct():
-                    return HttpResponse("Correct. <b>%s</b> killed <b>%s</b>. <a href='/'>Return</a>" % (guess.user.username,death.murderee.user.username))
+                    return HttpResponse("Correct. <b>%s</b> killed <b>%s</b>. <a href='"+BASE_URL + "/'>Return</a>"
+                                        % (guess.user.username,death.murderee.user.username))
                 else:
-                    return HttpResponse("Your investigation turns up nothing. <b>%s</b> did not kill <b>%s</b>. <a href='/'>Return</a>" % (guess.user.username, death.murderee.user.username))
+                    return HttpResponse(
+                        "Your investigation turns up nothing. <b>%s</b> did not kill <b>%s</b>. <a href='" +
+                        BASE_URL + "/'>Return</a>" % (guess.user.username, death.murderee.user.username))
         else:
-            return "Invalid investigation. <a href=\"/investigation-form\"> Try again</a>"
+            return "Invalid investigation. <a href=\"" + BASE_URL + "/investigation-form\"> Try again</a>"
     else:
         if Player.objects.get(user=request.user, game__active=True).is_alive():
             form = InvestigationForm()

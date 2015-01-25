@@ -10,6 +10,16 @@ https://docs.djangoproject.com/en/1.7/ref/settings/
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
+
+PRODUCTION = False
+
+if PRODUCTION:
+    BASE_URL = "/mafia"
+else:
+    BASE_URL = ""
+
+
+
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 TEMPLATE_DIRS = [os.path.join(BASE_DIR, 'templates')]
 
@@ -58,13 +68,25 @@ WSGI_APPLICATION = 'mafia.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/1.7/ref/settings/#databases
-
-DATABASES = {
+if PRODUCTION:
+    DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'jakobw+mafia-app',
+        'USER': 'jakobw',
+        'PASSWORD': 'vec67dav',
+        'HOST': 'sql.mit.edu',   # Or an IP Address that your DB is hosted on
+        'PORT': '3306',
     }
 }
+else:
+
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        }
+    }
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.7/topics/i18n/

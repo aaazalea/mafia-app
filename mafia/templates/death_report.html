@@ -6,7 +6,7 @@
 </head>
 <body>
 
-<form action="/death-report/" method="post">
+<form action="{%  url 'death_report' %}" method="post">
 	{% csrf_token %}
 	{{ form }}
 	<input type="submit" value="Submit" />

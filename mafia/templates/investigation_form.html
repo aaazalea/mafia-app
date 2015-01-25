@@ -6,7 +6,7 @@
 </head>
 <body>
 
-<form action="/investigation-form/" method="post">
+<form action="{% url 'investigation_form' %}" method="post">
 	{% csrf_token %}
 	{{ form }}
 	<input type="submit" value="Submit" />
