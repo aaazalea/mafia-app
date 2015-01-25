@@ -50,7 +50,7 @@ coverage.xml
 *.pot
 mafia/db.sqlite3
 .idea/*
-
+.idea/dataSources.xml
 
 
 # Sphinx documentation
