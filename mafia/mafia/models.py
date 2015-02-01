@@ -5,16 +5,20 @@ class Game(models.Model):
     god = models.ForeignKey(User)
     active = models.BooleanField(default=True)
     name = models.CharField(max_length=30)
+    current_day = models.IntegerField()
+
     def __str__(self):
         return self.name
 
-    def get_number_of_players(self):
-        return len(Player.objects.filter(game=self))
+    get_number_of_players = lambda self: len(Player.objects.filter(game=self))
     number_of_players = property(get_number_of_players)
 
-    def get_number_of_living_players(self):
-        return len(Player.objects.filter(game=self, alive=True))
+    get_living_players = lambda self: Player.objects.filter(game=self, death=None)
+    living_players = property(get_living_players)
+
+    get_number_of_living_players = lambda self: len(self.living_players)
     number_of_living_players = property(get_number_of_living_players)
+
 
 
 
@@ -89,6 +93,16 @@ class Player(models.Model):
             if not self.gn_partner.is_alive():
                 investigations = Investigation.filter(investigator=self)
 
+    def lynch_votes_for(self, day):
+        return [player for player in Player.objects.filter(game__active=True) if player.lynch_vote_made(day) == self]
+
+
+    def lynch_vote_made(self, day):
+        votes = LynchVote.objects.filter(voter=self, day=day).order_by('-time_made')
+        if votes:
+            return votes[0].lynchee
+        else:
+            return None
 
 
 
@@ -137,7 +151,7 @@ class Investigation(models.Model):
         (INVESTIGATOR, "Investigator"),
         (SUPERHERO, "Superhero"),
         (MAYORAL, "Mayoral"),
-        (POLICE_OFFICER,"Police Officer"),
+        (POLICE_OFFICER, "Police Officer"),
     )
 
     investigation_type = models.CharField(max_length=2, choices=INVESTIGATION_KINDS, default=INVESTIGATOR)
@@ -148,3 +162,9 @@ class Investigation(models.Model):
         # TODO Investigative powers
         return self.death.murderer == self.guess and self.death.is_investigable(self.investigation_type)
     correct = property(is_correct)
+
+class LynchVote(models.Model):
+    voter = models.ForeignKey(Player, related_name="lynch_votes_made")
+    lynchee = models.ForeignKey(Player, related_name="lynch_votes_received")
+    time_made = models.DateTimeField()
+    day = models.IntegerField()

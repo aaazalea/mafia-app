@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>Day {{ day }} Lynch - Mafia {{ game.name }}</title>
+</head>
+<body>
+    <h2>{{ lynchee.user.username }} is lynched.</h2>
+
+    {% for choice in choices %}
+        <p><h3>Votes for {{ choice.2.user.username }} ({{ choice.0 }}):</h3>
+            <ul>
+                {% for player in choice.1 %}
+                    <li>{{ player.user.username }}</li>
+                {% endfor %}
+            </ul>
+        </p>
+    {% endfor %}
+</body>
+</html>

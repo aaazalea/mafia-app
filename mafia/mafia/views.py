@@ -53,15 +53,12 @@ def kill_report(request):
             return HttpResponseRedirect("/")
 
     else:
-        try:
-            if Player.objects.get(user=request.user, game__active=True).is_alive():
-                form = KillReportForm()
+        if Player.objects.get(user=request.user, game__active=True).is_alive():
+            form = KillReportForm()
 
-                return render(request, 'kill_report.html', {'form': form})
-            else:
-                return HttpResponse("You're dead already")
-        except:
-            return HttpResponse("You don't have a role in any currently active game.")
+            return render(request, 'kill_report.html', {'form': form})
+        else:
+            return HttpResponse("You're dead already")
 
 
 @login_required
@@ -73,8 +70,13 @@ def recent_deaths(request):
 
 @login_required
 def your_role(request):
+    if request.user.username == "admin":
+        return HttpResponseRedirect("/admin")
     game = Game.objects.get(active=True)
-    player = Player.objects.get(game=game, user=request.user)
+    try:
+        player = Player.objects.get(game=game, user=request.user)
+    except:
+        return HttpResponse("You're not playing in this game. <a href='/logout'>Please log out and try again.</a>")
     username = request.user.username
     role = player.role
     additional_info = player.additional_info()
@@ -91,7 +93,7 @@ def your_role(request):
                    'links': links,
                    'alive': player.is_alive()})
 
-
+@login_required
 def investigation_form(request):
     game = Game.objects.get(active=True)
     player = Player.objects.get(game=game, user=request.user)
@@ -118,3 +120,24 @@ def investigation_form(request):
             return render(request, 'investigation_form.html', {'form': form})
         else:
             return HttpResponse("You're dead already")
+
+def daily_lynch(request, day):
+    # TODO implement tiebreaker
+    # TODO mayor triple vote
+    game = Game.objects.get(active=True)
+
+    choices = []
+    for player in Player.objects.all():
+        votes = player.lynch_votes_for(day)
+        if votes:
+            choices.append((len(votes), votes, player))
+
+    choices.sort(key=lambda c: -c[0])
+
+    lynchee = choices[0][2]
+
+    return render(request, 'daily_lynch.html', {'lynchee': lynchee,
+                                                'choices': choices,
+                                                'game': game,
+                                                'day': day})
+
