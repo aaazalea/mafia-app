@@ -1,5 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
+from mafia.settings import ROGUE_KILL_WAIT
+
 
 class Game(models.Model):
     god = models.ForeignKey(User)
@@ -19,6 +21,22 @@ class Game(models.Model):
     get_number_of_living_players = lambda self: len(self.living_players)
     number_of_living_players = property(get_number_of_living_players)
 
+    def increment_day(self):
+        if self.current_day == 0:
+            #start the game
+            self.active = True
+        else:
+            if Death.objects.exists(murderer__game=self):
+                pass
+                # TODO calculate a lynch
+            for player in Player.filter(game=self):
+                if player.dies_tonight():
+                    pass
+                    # TODO kill the player
+                player.increment_day()
+
+
+
 
 
 
@@ -37,6 +55,21 @@ class Player(models.Model):
     game = models.ForeignKey(Game)
     role = models.ForeignKey(Role, null=True)
     conscripted = models.BooleanField(default=False)
+
+    # Nothing:
+    #  - Innocent child
+    #  - Mafia
+    #  - Investigator
+    #  - Vigilante
+
+    # TODO conspiracy theorist list
+
+    # Rogue: first kill day
+    # Superhero: 1==secret identity, 0==superhero identity
+    # Desperado: number of days since going desperado
+    # Gay knight: id of partner (perhaps not since this is implemented separately)
+    # TODO implement Vampire (not doing this yet because very likely to change -jakob)
+    role_information = models.IntegerField(null=True)
 
     def __str__(self):
         return self.user.username + " (" + self.game.name + ")"
@@ -65,15 +98,59 @@ class Player(models.Model):
                 return "Your Gay Knight partner is <b>"+self.gn_partner.user.username + "</b>."
             else:
                 return "Your Gay Knight partner has not been assigned yet."
-        elif self.role.name == 'Rogue':
-            return "Your first kill day is not currently stored here."
+        elif self.role == Role.objects.get(name__iexact="rogue"):
+            next_kill_day = self.role_information
+            if self.game.current_day >= self.role_information:
+                if not self.kills.exists():
+                    can_kill = True
+                else:
+                    most_recent_kill = self.kills.order_by('-when')[0]
+                    last_kill_day = most_recent_kill.day
+                    next_kill_day = last_kill_day + ROGUE_KILL_WAIT
+                    if next_kill_day < self.game.current_day:
+                        can_kill = False
+                    else:
+                        can_kill = True
+
+            if can_kill:
+                return "You are next allowed to kill on <b> day %d</b>." % next_kill_day
+            else:
+                return "You are currently permitted to make kills."
         else:
             return ""
 
     is_evil = lambda self: self.role.evil_by_default or self.conscripted
 
     def can_investigate(self):
-        return True
+        if self.role == Role.objects.get(name__iexact='investigator'):
+            if not Investigation.objects.filter(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.INVESTIGATOR).exists():
+                return True
+        if self.role == Role.objects.get(name__iexact='superhero'):
+            # TODO implement secret identity / superhero identity
+            # return not Investigation.exists(day=self.game.current_day-1,
+            #   investigator=self,investigation_type=Investigation.SH)
+            if not Investigation.objects.filter(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.SUPERHERO).exists():
+                return True
+        if self.role == Role.objects.get(name__iexact='Gay knight'):
+            #TODO check rules about gay knights - I think it's not actually one investigation per day
+            if not Investigation.objects.filter(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.GAY_KNIGHT).exists():
+                if not self.gn_partner.alive:
+                    return True
+        if self.role == Role.objects.get(name__iexact='Desperado'):
+            if not Investigation.objects.filter(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.DESPERADO).exists():
+
+                if self.role_information:
+                    return True
+        # TODO implement elected positions
+        return False
 
     def can_make_kills(self):
         if self.role == Role.objects.get(name__iexact='mafia'):
@@ -105,9 +182,24 @@ class Player(models.Model):
             return None
 
 
+    def dies_tonight(self):
+        # TODO implement poison
 
+        if self.role == Role.objects.get(name__iexact="Desperado"):
+            # TODO how many days do desperados live?
+            if self.role_information == 2:
+                return True
+        elif self.role == Role.objects.get(name__iexact="Gay knight"):
+            if not self.gn_partner.alive:
+                return True
+        # elif self.role == Role.objects.get(name__iexact="Prophet")
 
-
+        return False
+    def increment_day(self):
+        """Called when the day ends by the Game object. Deaths are handled separately by dies_tonight()"""
+        if self.role == Role.objects.get(name__iexact="Desperado"):
+            if self.role_information:
+                self.role_information += 1
     def get_username(self):
         return self.user.username
     username = property(get_username)
@@ -118,8 +210,10 @@ class Death(models.Model):
     kaboom = models.BooleanField(default=False)
     murderee = models.OneToOneField(Player)
     where = models.CharField(max_length=100)
+
     #Manipulate The Press
     mtp = models.BooleanField(default=False)
+    day = models.IntegerField()
     def __str__(self):
         return "%s killed %s (%s)" % (self.murderer.user.username,
                                       self.murderee.user.username,
@@ -140,18 +234,21 @@ class Investigation(models.Model):
     # TODO Clues
     investigator = models.ForeignKey(Player)
     death = models.ForeignKey(Death)
+    day = models.IntegerField()
 
     INVESTIGATOR = 'IN'
     GAY_KNIGHT = 'GN'
     SUPERHERO = 'SH'
     MAYORAL = 'MY'
     POLICE_OFFICER = 'PO'
+    DESPERADO = "DE"
     INVESTIGATION_KINDS = (
         (GAY_KNIGHT, "Gay Knight"),
         (INVESTIGATOR, "Investigator"),
         (SUPERHERO, "Superhero"),
         (MAYORAL, "Mayoral"),
         (POLICE_OFFICER, "Police Officer"),
+        (DESPERADO, "Desperado")
     )
 
     investigation_type = models.CharField(max_length=2, choices=INVESTIGATION_KINDS, default=INVESTIGATOR)

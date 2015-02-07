@@ -99,3 +99,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/1.7/howto/static-files/
 
 STATIC_URL = '/static/'
+
+
+
+# Mafia
+
+ROGUE_KILL_WAIT = 3
+DESPERADO_DAYS = 2

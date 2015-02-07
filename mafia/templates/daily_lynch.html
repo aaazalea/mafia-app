@@ -1,10 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title>Day {{ day }} Lynch - Mafia {{ game.name }}</title>
-</head>
-<body>
+{% extends "base.html" %}
+{% block "title" %} Day {{ day }} Lynch - Mafia {{ player.game.name }} {% endblock %}
+
+
+{% block "main" %}
+
     <h2>{{ lynchee.user.username }} is lynched.</h2>
 
     {% for choice in choices %}
@@ -16,5 +15,4 @@
             </ul>
         </p>
     {% endfor %}
-</body>
-</html>
+{% endblock %}

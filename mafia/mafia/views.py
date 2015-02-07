@@ -2,9 +2,9 @@ from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect, HttpResponse
-from forms import DeathReportForm, InvestigationForm, KillReportForm
+from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation
+from models import Player, Death, Game, Investigation, LynchVote
 from django.core.urlresolvers import reverse
 
 
@@ -22,7 +22,8 @@ def death_report(request):
             killed = Player.objects.get(user=request.user, game__active=True)
             when = datetime.now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
-            death = Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, where=where)
+            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, where=where,
+                                 day=Game.objects.get(active=True).current_day)
             return HttpResponseRedirect("/")
 
     else:
@@ -48,8 +49,8 @@ def kill_report(request):
             when = datetime.now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
             mtp = 'mtp' in form.data
-            death = Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, mtp=mtp,
-                                         where=where)
+            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, mtp=mtp,
+                                 day=Game.objects.get(active=True).current_day, where=where)
             return HttpResponseRedirect("/")
 
     else:
@@ -77,21 +78,18 @@ def your_role(request):
         player = Player.objects.get(game=game, user=request.user)
     except:
         return HttpResponse("You're not playing in this game. <a href='/logout'>Please log out and try again.</a>")
-    username = request.user.username
-    role = player.role
     additional_info = player.additional_info()
     links = [(reverse('death_report'), "I died.")]
     if player.can_make_kills():
         links.append((reverse('kill_report'), "Report a kill you made"))
     if player.can_investigate():
         links.append((reverse('investigation_form'), "Make an investigation"))
+
+    current_lynch_vote = player.lynch_vote_made(game.current_day)
     return render(request, 'your_role.html',
-                  {'game': game,
-                   'role': role,
-                   'extra': additional_info,
-                   'username': username,
-                   'links': links,
-                   'alive': player.is_alive()})
+                  {'links': links,
+                   'vote': current_lynch_vote,
+                   'player': player})
 
 @login_required
 def investigation_form(request):
@@ -121,7 +119,9 @@ def investigation_form(request):
         else:
             return HttpResponse("You're dead already")
 
+@login_required
 def daily_lynch(request, day):
+    player = Player.objects.get(user=request.user, game__active=True)
     # TODO implement tiebreaker
     # TODO mayor triple vote
     game = Game.objects.get(active=True)
@@ -139,5 +139,24 @@ def daily_lynch(request, day):
     return render(request, 'daily_lynch.html', {'lynchee': lynchee,
                                                 'choices': choices,
                                                 'game': game,
-                                                'day': day})
+                                                'day': day,
+                                                'player': player})
 
+
+@login_required
+def lynch_vote(request):
+    player = Player.objects.get(user=request.user, game__active=True)
+    game = player.game
+    if player.is_alive():
+        if request.method == "POST":
+            form = LynchVoteForm(request.POST)
+            if form.is_valid():
+                vote = Player.objects.get(id=form.data["vote"])
+                LynchVote.objects.create(voter=player, lynchee=vote, time_made=datetime.now(), day=game.current_day)
+                return HttpResponseRedirect("/")
+        else:
+            form = LynchVoteForm()
+
+            return render(request, 'lynch_vote.html', {'form': form, 'player': player})
+    else:
+            return HttpResponse("Dead people don't vote. :(")

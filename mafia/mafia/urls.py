@@ -12,7 +12,8 @@ urlpatterns = patterns('',
     url(r'^accounts/login/$', 'django.contrib.auth.views.login'),
     url(r'^accounts/profile/$', 'mafia.views.your_role', name='index1'),
     url(r'^logout/$', 'django.contrib.auth.views.logout_then_login', name='logout'),
-    url(r'^lynch/(?P<day>\d+)', 'mafia.views.daily_lynch', name='lynch'),
+    url(r'^lynch/(?P<day>\d+)', 'mafia.views.daily_lynch', name='daily_lynch'),
+    url(r'^lynch-vote/$', 'mafia.views.lynch_vote', name='vote'),
 
     url(r'^admin/', include(admin.site.urls)),
 )

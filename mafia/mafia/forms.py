@@ -44,3 +44,9 @@ class InvestigationForm(forms.Form):
     investigation_type = forms.ChoiceField(choices=Investigation.INVESTIGATION_KINDS,
                              label="What kind of investigation are you using? [choose one you're allowed to]"
                                      )
+
+class LynchVoteForm(forms.Form):
+    vote = PlayerModelChoiceField(
+        queryset=Player.objects.filter(game__active=True,death=None),
+        label="Whom do you want to lynch?"
+    )
