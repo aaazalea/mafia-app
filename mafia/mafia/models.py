@@ -1,3 +1,4 @@
+import random
 from django.db import models
 from django.contrib.auth.models import User
 from mafia.settings import ROGUE_KILL_WAIT
@@ -265,3 +266,42 @@ class LynchVote(models.Model):
     lynchee = models.ForeignKey(Player, related_name="lynch_votes_received")
     time_made = models.DateTimeField()
     day = models.IntegerField()
+
+class Item(models.Model):
+    TASER = "TA"
+    SHOVEL = "SH"
+    MICROPHONE = "MI"
+    RECEIVER = "RE"
+    MEDKIT = "ME"
+
+    ITEM_TYPE = (
+        (TASER, "Taser"),
+        (SHOVEL, "Shovel"),
+        (MEDKIT, "Medkit"),
+        (MICROPHONE, "Microphone"),
+        (RECEIVER, "Receiver"),
+    )
+
+    game = models.ForeignKey(Game)
+    owner = models.ForeignKey(Player)
+    number = models.IntegerField()
+    type = models.CharField(max_length=2, choices=ITEM_TYPE)
+
+    def get_password(self):
+        if not hasattr(self, "secret"):
+            self.secret = "".join(random.choice("1234567890QWERTYUIOPASDFGHJKLZXCVBNM") for i in range(6))
+        return self.secret
+    password = property(get_password)
+
+    def get_name(self):
+        for a,b in Item.ITEM_TYPE:
+            if a == self.type:
+                return "%s %d" % (b, self.number)
+        return "Mystery Item"
+    name = property(get_name)
+
+    def __str__(self):
+        for a,b in Item.ITEM_TYPE:
+            if a == self.type:
+                return "%s %d (%s)" % (b,self.number,self.game.name)
+        return "????? (Item)"

@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseRedirect, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote
+from models import Player, Death, Game, Investigation, LynchVote, Item
 from django.core.urlresolvers import reverse
 
 
@@ -160,3 +160,18 @@ def lynch_vote(request):
             return render(request, 'lynch_vote.html', {'form': form, 'player': player})
     else:
             return HttpResponse("Dead people don't vote. :(")
+
+@login_required
+def item(request, id, password):
+    item = Item.objects.get(id=id)
+    if item.password != password:
+        return HttpResponseNotFound
+    else:
+        player = Player.objects.get(user=request.user, game__active=True)
+        if player == item.owner:
+            #Using the item
+            return HttpResponse("Using items is not yet implemented.")
+        else:
+            old_owner = item.owner
+            item.owner = player
+            return HttpResponse("You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (item.name,old_owner.username))
