@@ -48,13 +48,17 @@ class Role(models.Model):
     def __str__(self):
         return self.name
 
-
-
+class ElectedRole(models.Model):
+    name = models.CharField(max_length=20)
+    description = models.TextField(blank=True)
+    def __str__(self):
+        return self.name
 
 class Player(models.Model):
     user = models.ForeignKey(User)
     game = models.ForeignKey(Game)
     role = models.ForeignKey(Role, null=True)
+    elected_roles = models.ManyToManyField(ElectedRole)
     conscripted = models.BooleanField(default=False)
 
     # Nothing:
@@ -122,35 +126,40 @@ class Player(models.Model):
 
     is_evil = lambda self: self.role.evil_by_default or self.conscripted
 
-    def can_investigate(self):
-        if self.role == Role.objects.get(name__iexact='investigator'):
-            if not Investigation.objects.filter(investigator=self,
-                                                day=self.game.current_day,
-                                                investigation_type=Investigation.INVESTIGATOR).exists():
+    def can_investigate(self, kind=None):
+        if self.elected_roles.exists(name__iexact='mayor') and (kind == None or kind == Investigation.MAYORAL):
+            if not Investigation.objects.exists(investigator=self,
+                                                day__gte=self.game.current_day-1,
+                                                investigation_type=Investigation.MAYORAL):
                 return True
-        if self.role == Role.objects.get(name__iexact='superhero'):
+        if self.role == Role.objects.get(name__iexact='investigator') and (kind == None or kind == Investigation.INVESTIGATOR):
+            if not Investigation.objects.exists(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.INVESTIGATOR):
+                return True
+        if self.role == Role.objects.get(name__iexact='superhero') and (kind == None or kind == Investigation.SUPERHERO):
             # TODO implement secret identity / superhero identity
             # return not Investigation.exists(day=self.game.current_day-1,
             #   investigator=self,investigation_type=Investigation.SH)
-            if not Investigation.objects.filter(investigator=self,
+            if not Investigation.objects.exists(investigator=self,
                                                 day=self.game.current_day,
-                                                investigation_type=Investigation.SUPERHERO).exists():
+                                                investigation_type=Investigation.SUPERHERO):
                 return True
-        if self.role == Role.objects.get(name__iexact='Gay knight'):
+        if self.role == Role.objects.get(name__iexact='Gay knight') and (kind == None or kind == Investigation.GAY_KNIGHT):
             #TODO check rules about gay knights - I think it's not actually one investigation per day
-            if not Investigation.objects.filter(investigator=self,
+            if not Investigation.objects.exists(investigator=self,
                                                 day=self.game.current_day,
-                                                investigation_type=Investigation.GAY_KNIGHT).exists():
+                                                investigation_type=Investigation.GAY_KNIGHT):
                 if not self.gn_partner.alive:
                     return True
-        if self.role == Role.objects.get(name__iexact='Desperado'):
+        if self.role == Role.objects.get(name__iexact='Desperado') and (kind == None or kind == Investigation.DESPERADO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
 
                 if self.role_information:
                     return True
-        # TODO implement elected positions
+        # TODO implement police officer
         return False
 
     def can_make_kills(self):
@@ -173,7 +182,6 @@ class Player(models.Model):
 
     def lynch_votes_for(self, day):
         return [player for player in Player.objects.filter(game__active=True) if player.lynch_vote_made(day) == self]
-
 
     def lynch_vote_made(self, day):
         votes = LynchVote.objects.filter(voter=self, day=day).order_by('-time_made')
@@ -223,7 +231,8 @@ class Death(models.Model):
         if investigation_type == Investigation.GAY_KNIGHT:
             return True
         elif self.mtp:
-            return True
+            return False
+        return True
 
 class GayKnightPair(models.Model):
     player1 = models.ForeignKey(Player, related_name='gnp1')
