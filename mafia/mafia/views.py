@@ -98,8 +98,8 @@ def investigation_form(request):
     if request.method == "POST":
         form = InvestigationForm(request.POST)
         if form.is_valid():
-            if player.can_investigate():
-                death = Death.objects.get(id=form.data["death"])
+            death = Death.objects.get(id=form.data["death"])
+            if player.can_investigate(form.data['investigation_type'], death):
                 guess = Player.objects.get(id=form.data['guess'])
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
                                                              investigation_type=form.data['investigation_type'])
@@ -109,8 +109,10 @@ def investigation_form(request):
                 else:
                     return HttpResponse(
                         "Your investigation turns up nothing. <b>%s</b> did not kill <b>%s</b>. <a href='%s'>Return</a>" % (guess.user.username, death.murderee.user.username, reverse('index')))
+            else:
+                return HttpResponse("You can't use that kind of investigation.")
         else:
-            return "Invalid investigation. <a href=\"%s\"> Try again</a>" % reverse('investigation_form')
+            return HttpResponse("Invalid investigation. <a href=\"%s\"> Try again</a>" % reverse('investigation_form'))
     else:
         if Player.objects.get(user=request.user, game__active=True).is_alive():
             form = InvestigationForm()

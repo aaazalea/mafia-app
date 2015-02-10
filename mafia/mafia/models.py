@@ -1,7 +1,7 @@
 import random
 from django.db import models
 from django.contrib.auth.models import User
-from mafia.settings import ROGUE_KILL_WAIT, DESPERADO_DAYS
+from mafia.settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS
 from django.utils.datetime_safe import datetime
 
 
@@ -122,6 +122,26 @@ class Player(models.Model):
 
     gn_partner = property(get_gn_partner)
 
+    def cant_rogue_kill(self):
+        """
+
+        :return: False if the rogue can kill now, otherwise the next kill day
+        """
+        next_kill_day = self.role_information
+        if self.game.current_day >= self.role_information:
+            if not self.kills.exists():
+                return False
+            else:
+                most_recent_kill = self.kills.order_by('-when')[0]
+                last_kill_day = most_recent_kill.day
+                next_kill_day = last_kill_day + ROGUE_KILL_WAIT
+                if next_kill_day < self.game.current_day:
+                    return next_kill_day
+                else:
+                    return False
+
+    rogue_cant_kill = property(cant_rogue_kill)
+
     def additional_info(self):
         if self.role == Role.objects.get(name__iexact='gay knight'):
             if self.gn_partner:
@@ -129,53 +149,45 @@ class Player(models.Model):
             else:
                 return "Your Gay Knight partner has not been assigned yet."
         elif self.role == Role.objects.get(name__iexact="rogue"):
-            next_kill_day = self.role_information
-            if self.game.current_day >= self.role_information:
-                if not self.kills.exists():
-                    can_kill = True
-                else:
-                    most_recent_kill = self.kills.order_by('-when')[0]
-                    last_kill_day = most_recent_kill.day
-                    next_kill_day = last_kill_day + ROGUE_KILL_WAIT
-                    if next_kill_day < self.game.current_day:
-                        can_kill = False
-                    else:
-                        can_kill = True
-
-            if can_kill:
-                return "You are next allowed to kill on <b> day %d</b>." % next_kill_day
-            else:
+            if self.rogue_cant_kill:
                 return "You are currently permitted to make kills."
+            else:
+                return "You are next allowed to kill on <b> day %d</b>." % self.rogue_cant_kill
         else:
             return ""
 
     is_evil = lambda self: self.role.evil_by_default or self.conscripted
 
-    def can_investigate(self, kind=None):
-        if self.elected_roles.exists(name__iexact='mayor') and (kind == None or kind == Investigation.MAYORAL):
-            if not Investigation.objects.exists(investigator=self,
+    def get_investigations(self):
+        return Investigation.objects.filter(investigator=self)
+
+    investigations = property(get_investigations)
+
+    def can_investigate(self, kind=None, death=None):
+        if self.elected_roles.filter(name__iexact='mayor').exists() and (kind == None or kind == Investigation.MAYORAL):
+            if not Investigation.objects.filter(investigator=self,
                                                 day__gte=self.game.current_day-1,
-                                                investigation_type=Investigation.MAYORAL):
+                                                investigation_type=Investigation.MAYORAL).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='investigator') and (kind == None or kind == Investigation.INVESTIGATOR):
-            if not Investigation.objects.exists(investigator=self,
+            if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
-                                                investigation_type=Investigation.INVESTIGATOR):
+                                                investigation_type=Investigation.INVESTIGATOR).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='superhero') and (kind == None or kind == Investigation.SUPERHERO):
             # TODO implement secret identity / superhero identity
             # return not Investigation.exists(day=self.game.current_day-1,
             #   investigator=self,investigation_type=Investigation.SH)
-            if not Investigation.objects.exists(investigator=self,
+            if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
-                                                investigation_type=Investigation.SUPERHERO):
+                                                investigation_type=Investigation.SUPERHERO).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='Gay knight') and (kind == None or kind == Investigation.GAY_KNIGHT):
             #TODO check rules about gay knights - I think it's not actually one investigation per day
-            if not Investigation.objects.exists(investigator=self,
+            if not len(Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
-                                                investigation_type=Investigation.GAY_KNIGHT):
-                if not self.gn_partner.alive:
+                                                investigation_type=Investigation.GAY_KNIGHT)) >= GAY_KNIGHT_INVESTIGATIONS:
+                if not self.gn_partner.alive and death.murderee == self.gn_partner:
                     return True
         if self.role == Role.objects.get(name__iexact='Desperado') and (kind == None or kind == Investigation.DESPERADO):
             if not Investigation.objects.filter(investigator=self,
@@ -188,11 +200,10 @@ class Player(models.Model):
         return False
 
     def can_make_kills(self):
-        if self.role == Role.objects.get(name__iexact='mafia'):
+        if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
             return True
         elif self.role == Role.objects.get(name__iexact='rogue'):
-            # TODO Implement rogue kill day
-            return True
+            return not self.rogue_cant_kill
         elif self.role == Role.objects.get(name__iexact='vigilante'):
             for kill in self.kills:
                 if not kill.murderee.is_evil():
