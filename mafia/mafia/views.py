@@ -175,3 +175,6 @@ def item(request, id, password):
             old_owner = item.owner
             item.owner = player
             return HttpResponse("You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (item.name,old_owner.username))
+
+def sign_up(request):
+    pass

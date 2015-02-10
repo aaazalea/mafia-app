@@ -50,3 +50,13 @@ class LynchVoteForm(forms.Form):
         queryset=Player.objects.filter(game__active=True,death=None),
         label="Whom do you want to lynch?"
     )
+
+class SignUpForm(forms.Form):
+    username = forms.CharField(max_length=30, label="Username (The same as on mafia.mit.edu, except for spaces)")
+    password = forms.CharField(max_length=200, label="Password: ", widget=forms.PasswordInput())
+    confirm_password = forms.CharField(max_length=200, label="Confirm password: ", widget=forms.PasswordInput())
+    email = forms.EmailField(max_length=50, label="Email Address:")
+    game = forms.ModelChoiceField(
+        queryset=Game.objects.filter(archived=False),
+        label="Choose a game to join:"
+    )
