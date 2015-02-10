@@ -126,17 +126,16 @@ def daily_lynch(request, day):
     # TODO mayor triple vote
     game = Game.objects.get(active=True)
 
-    choices = []
-    for player in Player.objects.all():
-        votes = player.lynch_votes_for(day)
-        if votes:
-            choices.append((len(votes), votes, player))
+    lynches, choices = game.get_lynch(day)
 
-    choices.sort(key=lambda c: -c[0])
+    if len(lynches) == 0:
+        lynch_str = "No lynch"
+    elif len(lynches) == 1:
+        lynch_str = "%s is lynched." % lynches[0].username
+    else:
+        lynch_str = ", ".join(a.username for a in lynches) + " are lynched."
 
-    lynchee = choices[0][2]
-
-    return render(request, 'daily_lynch.html', {'lynchee': lynchee,
+    return render(request, 'daily_lynch.html', {'lynch_str': lynch_str,
                                                 'choices': choices,
                                                 'game': game,
                                                 'day': day,

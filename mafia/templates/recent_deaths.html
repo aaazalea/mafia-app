@@ -8,11 +8,11 @@
 <table border="1">
     <tr>
         <th>Killed</th>
-        <th>Where</th>
+        <th>Where/How</th>
         <th>When</th>
-        {%  if god %}
+        {% if god %}
             <th>By whom</th>
-        {%  endif %}
+        {% endif %}
     </tr>
     {% for death in deaths %}
         <tr>
@@ -23,7 +23,7 @@
                 <td>{{ death.murderer.user.username }}</td>
             {% endif %}
         </tr>
-    {%  endfor %}
+    {% endfor %}
 </table>
 </body>
 </html>

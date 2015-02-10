@@ -15,10 +15,10 @@ class Game(models.Model):
     def __str__(self):
         return self.name
 
-    get_number_of_players = lambda self: len(Player.objects.filter(game=self))
+    get_number_of_players = lambda self: len(self.player_set.all())
     number_of_players = property(get_number_of_players)
 
-    get_living_players = lambda self: Player.objects.filter(game=self, death=None)
+    get_living_players = lambda self: self.player_set.filter(game=self, death=None)
     living_players = property(get_living_players)
 
     get_number_of_living_players = lambda self: len(self.living_players)
@@ -30,16 +30,37 @@ class Game(models.Model):
             self.active = True
         else:
             #If anybody has been killed yet this game
-            if Death.objects.exists(murderer__game=self):
-                pass
-                # TODO calculate a lynch
-            for player in Player.filter(game=self):
+            if Death.objects.filter(murderer__game=self).exists():
+                lynches, choices = self.get_lynch(self.current_day)
+                for lynched in lynches:
+                    Death.objects.create(murderee=lynched, when=datetime.now(), day=self.current_day,
+                                         where="Lynch (day %d)" % self.current_day)
+            for player in self.player_set.all():
                 why = player.dies_tonight()
                 if why:
                     Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
                 player.increment_day()
 
         self.current_day += 1
+
+    def get_lynch(self, day):
+        """
+        :param day: The day whose lynch is being found
+        :return: tuple of actually lynched players,
+                 list of tuples (lynchee, num votes)
+        """
+        # TODO tiebreaker logic
+        #TODO mayoral x3
+        choices = []
+        for player in self.player_set.all():
+            votes = player.lynch_votes_for(day)
+            if votes:
+                choices.append((player, votes))
+
+        choices.sort(key=lambda c: -len(c[1]))
+        lynches = (choices[0][0],)
+
+        return lynches, choices
 
 
 class Role(models.Model):
@@ -167,7 +188,7 @@ class Player(models.Model):
             return True
         elif self.role == Role.objects.get(name__iexact='gay knight'):
             if not self.gn_partner.is_alive():
-                investigations = Investigation.filter(investigator=self)
+                investigations = Investigation.objects.filter(investigator=self)
 
     def lynch_votes_for(self, day):
         return [player for player in Player.objects.filter(game__active=True) if player.lynch_vote_made(day) == self]
@@ -213,9 +234,12 @@ class Death(models.Model):
     mtp = models.BooleanField(default=False)
     day = models.IntegerField()
     def __str__(self):
-        return "%s killed %s (%s)" % (self.murderer.user.username,
-                                      self.murderee.user.username,
+        if self.murderer:
+            return "%s killed %s (%s)" % (self.murderer.username,
+                                          self.murderee.username,
                                       self.murderer.game)
+        else:
+            return "%s died due to %s" % (self.murderee.username, self.where)
     def is_investigable(self, investigation_type):
         if investigation_type == Investigation.GAY_KNIGHT:
             return True
