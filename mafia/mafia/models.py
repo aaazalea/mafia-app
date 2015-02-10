@@ -63,9 +63,18 @@ class Game(models.Model):
         return lynches, choices
 
 
+
+
+
 class Role(models.Model):
     name = models.CharField(max_length=20)
     evil_by_default = models.BooleanField(default=False)
+    description = models.TextField(blank=True)
+    def __str__(self):
+        return self.name
+
+class ElectedRole(models.Model):
+    name = models.CharField(max_length=20)
     description = models.TextField(blank=True)
     def __str__(self):
         return self.name
@@ -74,6 +83,7 @@ class Player(models.Model):
     user = models.ForeignKey(User)
     game = models.ForeignKey(Game)
     role = models.ForeignKey(Role, null=True)
+    elected_roles = models.ManyToManyField(ElectedRole)
     conscripted = models.BooleanField(default=False)
 
     # Nothing:
@@ -86,7 +96,7 @@ class Player(models.Model):
 
     # Rogue: first kill day
     # Superhero: 1==secret identity, 0==superhero identity
-    # Desperado: number of days since going desperado (1 == will go desperado tonight).
+    # Desperado: number of days since going desperado
     # Gay knight: id of partner (perhaps not since this is implemented separately)
     # TODO implement Vampire (not doing this yet because very likely to change -jakob)
     role_information = models.IntegerField(null=True)
@@ -141,35 +151,40 @@ class Player(models.Model):
 
     is_evil = lambda self: self.role.evil_by_default or self.conscripted
 
-    def can_investigate(self):
-        if self.role == Role.objects.get(name__iexact='investigator'):
-            if not Investigation.objects.filter(investigator=self,
-                                                day=self.game.current_day,
-                                                investigation_type=Investigation.INVESTIGATOR).exists():
+    def can_investigate(self, kind=None):
+        if self.elected_roles.exists(name__iexact='mayor') and (kind == None or kind == Investigation.MAYORAL):
+            if not Investigation.objects.exists(investigator=self,
+                                                day__gte=self.game.current_day-1,
+                                                investigation_type=Investigation.MAYORAL):
                 return True
-        if self.role == Role.objects.get(name__iexact='superhero'):
+        if self.role == Role.objects.get(name__iexact='investigator') and (kind == None or kind == Investigation.INVESTIGATOR):
+            if not Investigation.objects.exists(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.INVESTIGATOR):
+                return True
+        if self.role == Role.objects.get(name__iexact='superhero') and (kind == None or kind == Investigation.SUPERHERO):
             # TODO implement secret identity / superhero identity
             # return not Investigation.exists(day=self.game.current_day-1,
             #   investigator=self,investigation_type=Investigation.SH)
-            if not Investigation.objects.filter(investigator=self,
+            if not Investigation.objects.exists(investigator=self,
                                                 day=self.game.current_day,
-                                                investigation_type=Investigation.SUPERHERO).exists():
+                                                investigation_type=Investigation.SUPERHERO):
                 return True
-        if self.role == Role.objects.get(name__iexact='Gay knight'):
+        if self.role == Role.objects.get(name__iexact='Gay knight') and (kind == None or kind == Investigation.GAY_KNIGHT):
             #TODO check rules about gay knights - I think it's not actually one investigation per day
-            if not Investigation.objects.filter(investigator=self,
+            if not Investigation.objects.exists(investigator=self,
                                                 day=self.game.current_day,
-                                                investigation_type=Investigation.GAY_KNIGHT).exists():
+                                                investigation_type=Investigation.GAY_KNIGHT):
                 if not self.gn_partner.alive:
                     return True
-        if self.role == Role.objects.get(name__iexact='Desperado'):
+        if self.role == Role.objects.get(name__iexact='Desperado') and (kind == None or kind == Investigation.DESPERADO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
 
                 if self.role_information>1:
                     return True
-        # TODO implement elected positions
+        # TODO implement police officer
         return False
 
     def can_make_kills(self):
@@ -244,7 +259,8 @@ class Death(models.Model):
         if investigation_type == Investigation.GAY_KNIGHT:
             return True
         elif self.mtp:
-            return True
+            return False
+        return True
 
 class GayKnightPair(models.Model):
     player1 = models.ForeignKey(Player, related_name='gnp1')
