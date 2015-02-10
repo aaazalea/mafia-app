@@ -1,12 +1,14 @@
 import random
 from django.db import models
 from django.contrib.auth.models import User
-from mafia.settings import ROGUE_KILL_WAIT
+from mafia.settings import ROGUE_KILL_WAIT, DESPERADO_DAYS
+from django.utils.datetime_safe import datetime
 
 
 class Game(models.Model):
     god = models.ForeignKey(User)
-    active = models.BooleanField(default=True)
+    active = models.BooleanField(default=False)
+    archived = models.BooleanField(default=False)
     name = models.CharField(max_length=30)
     current_day = models.IntegerField()
 
@@ -27,15 +29,17 @@ class Game(models.Model):
             #start the game
             self.active = True
         else:
+            #If anybody has been killed yet this game
             if Death.objects.exists(murderer__game=self):
                 pass
                 # TODO calculate a lynch
             for player in Player.filter(game=self):
-                if player.dies_tonight():
-                    pass
-                    # TODO kill the player
+                why = player.dies_tonight()
+                if why:
+                    Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
                 player.increment_day()
 
+        self.current_day += 1
 
 
 
@@ -157,7 +161,7 @@ class Player(models.Model):
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
 
-                if self.role_information:
+                if self.role_information>1:
                     return True
         # TODO implement police officer
         return False
@@ -195,12 +199,12 @@ class Player(models.Model):
         # TODO implement poison
 
         if self.role == Role.objects.get(name__iexact="Desperado"):
-            # TODO how many days do desperados live?
-            if self.role_information == 2:
-                return True
+            if self.role_information == DESPERADO_DAYS+1:
+                return "Desperation"
         elif self.role == Role.objects.get(name__iexact="Gay knight"):
             if not self.gn_partner.alive:
-                return True
+                # TODO how many days do GNs live again?
+                return "Lovesickness"
         # elif self.role == Role.objects.get(name__iexact="Prophet")
 
         return False
@@ -214,7 +218,7 @@ class Player(models.Model):
     username = property(get_username)
 
 class Death(models.Model):
-    murderer = models.ForeignKey(Player, related_name='kills')
+    murderer = models.ForeignKey(Player, related_name='kills', null=True)
     when = models.DateTimeField()
     kaboom = models.BooleanField(default=False)
     murderee = models.OneToOneField(Player)
@@ -314,3 +318,7 @@ class Item(models.Model):
             if a == self.type:
                 return "%s %d (%s)" % (b,self.number,self.game.name)
         return "????? (Item)"
+
+class ForumUsername(models.Model):
+    username = models.CharField(max_length=100)
+    user = models.OneToOneField(User)
