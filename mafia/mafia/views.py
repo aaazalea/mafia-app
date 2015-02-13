@@ -4,7 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote, Item
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role
 from django.core.urlresolvers import reverse
 
 
@@ -66,7 +66,7 @@ def kill_report(request):
 def recent_deaths(request):
     game = Game.objects.get(active=True)
     is_god = request.user == game.god
-    recents = Death.objects.filter(murderer__game__active=True).order_by('-when')
+    recents = Death.objects.filter(murderee__game__active=True).order_by('-when')
     return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents})
 
 @login_required
@@ -84,12 +84,16 @@ def your_role(request):
         links.append((reverse('kill_report'), "Report a kill you made"))
     if player.can_investigate():
         links.append((reverse('investigation_form'), "Make an investigation"))
-
+    if player.role == Role.objects.get(name="Desperado") and not player.role_information:
+        links.append((
+            "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
+                'go_desperado'), "Go desperado"))
     current_lynch_vote = player.lynch_vote_made(game.current_day)
     return render(request, 'your_role.html',
                   {'links': links,
                    'vote': current_lynch_vote,
                    'player': player})
+
 
 @login_required
 def investigation_form(request):
@@ -105,7 +109,7 @@ def investigation_form(request):
                                                              investigation_type=form.data['investigation_type'])
                 if investigation.is_correct():
                     return HttpResponse("Correct. <b>%s</b> killed <b>%s</b>. <a href='%s'>Return</a>"
-                                        % (guess.user.username,death.murderee.user.username, reverse('index')))
+                                        % (guess.user.username, death.murderee.user.username, reverse('index')))
                 else:
                     return HttpResponse(
                         "Your investigation turns up nothing. <b>%s</b> did not kill <b>%s</b>. <a href='%s'>Return</a>" % (guess.user.username, death.murderee.user.username, reverse('index')))
@@ -160,7 +164,7 @@ def lynch_vote(request):
 
             return render(request, 'lynch_vote.html', {'form': form, 'player': player})
     else:
-            return HttpResponse("Dead people don't vote. :(")
+        return HttpResponse("Dead people don't vote. :(")
 
 @login_required
 def item(request, id, password):
@@ -170,12 +174,23 @@ def item(request, id, password):
     else:
         player = Player.objects.get(user=request.user, game__active=True)
         if player == item.owner:
-            #Using the item
+            # Using the item
             return HttpResponse("Using items is not yet implemented.")
         else:
             old_owner = item.owner
             item.owner = player
-            return HttpResponse("You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (item.name,old_owner.username))
+            return HttpResponse("You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (
+                item.name, old_owner.username))
 
 def sign_up(request):
     pass
+
+
+@login_required
+def go_desperado(request):
+    player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
+    if not player.role_information:
+        player.role_information = 1
+        player.save()
+    return HttpResponseRedirect("/")
+

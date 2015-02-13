@@ -15,5 +15,6 @@ urlpatterns = patterns('',
     url(r'^lynch/(?P<day>\d+)', 'mafia.views.daily_lynch', name='daily_lynch'),
     url(r'^lynch-vote/$', 'mafia.views.lynch_vote', name='vote'),
     url(r'^item/(?P<id>\d+)/(?P<password>\d+)', 'mafia.views.item', name='item'),
+    url(r'^go-desperado/$', 'mafia.views.go_desperado', name='go_desperado'),
     url(r'^admin/', include(admin.site.urls)),
 )
