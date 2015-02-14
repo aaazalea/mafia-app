@@ -84,7 +84,7 @@ def your_role(request):
         links.append((reverse('kill_report'), "Report a kill you made"))
     if player.can_investigate():
         links.append((reverse('investigation_form'), "Make an investigation"))
-    if player.role == Role.objects.get(name="Desperado") and not player.role_information:
+    if player.role == Role.objects.get(name="Desperado") and player.role_information == Player.DESPERADO_INACTIVE:
         links.append((
             "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
                 'go_desperado'), "Go desperado"))
@@ -189,8 +189,8 @@ def sign_up(request):
 @login_required
 def go_desperado(request):
     player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
-    if not player.role_information:
-        player.role_information = 1
+    if player.role_information == Player.DESPERADO_INACTIVE:
+        player.role_information = Player.DESPERADO_ACTIVATING
         player.save()
     return HttpResponseRedirect("/")
 

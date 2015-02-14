@@ -92,14 +92,17 @@ class Player(models.Model):
 
     # Nothing:
     # - Innocent child
-    #  - Mafia
+    # - Mafia
     #  - Investigator
     #  - Vigilante
 
     # TODO conspiracy theorist list
-
+    SUPERHERO_IDENTITY = 1
+    SECRET_IDENTITY = 0
+    DESPERADO_INACTIVE = -1
+    DESPERADO_ACTIVATING = 0
     # Rogue: first kill day
-    # Superhero: 1==secret identity, 0==superhero identity
+    # Superhero: 0==secret identity, 1==superhero identity
     # Desperado: number of days since going desperado
     # Gay knight: id of partner (perhaps not since this is implemented separately)
     # TODO implement Vampire (not doing this yet because very likely to change -jakob)
@@ -159,14 +162,14 @@ class Player(models.Model):
             else:
                 return "You are next allowed to kill on <b> day %d</b>." % self.rogue_cant_kill
         elif self.role == Role.objects.get(name__iexact="desperado"):
-            if self.role_information == 0:
+            if self.role_information == Player.DESPERADO_INACTIVE:
                 return "You have not gone desperado yet."
-            elif self.role_information == 1:
+            elif self.role_information == Player.DESPERADO_ACTIVATING:
                 return "You are going desperado <b>tonight</b>."
             else:
-                return "You went desperado on day <b>%d</b>. You die at day end on day <b>%d</b>" % (
-                    (self.game.current_day + 1 - self.role_information),
-                    (self.game.current_day + 1 + DESPERADO_DAYS - self.role_information))
+                return "You decided to go desperado on day <b>%d</b>. You die at day end on day <b>%d</b>" % (
+                    (self.game.current_day - self.role_information),
+                    (self.game.current_day + DESPERADO_DAYS - self.role_information))
 
         else:
             return ""
@@ -213,10 +216,21 @@ class Player(models.Model):
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
 
-                if self.role_information > 1:
+                if self.role_information > Player.DESPERADO_ACTIVATING:
                     return True
         # TODO implement police officer
         return False
+
+    def save(self, force_insert=False, force_update=False, using=None, update_fields=None):
+        if self.role_information is None:
+            if self.role == Role.objects.get(name__iexact='rogue'):
+                self.role_information = random.randint(1, ROGUE_KILL_WAIT + 1)
+            if self.role == Role.objects.get(name__iexact='Superhero'):
+                self.role_information = Player.SUPERHERO_IDENTITY
+            if self.role == Role.objects.get(name__iexact='Desperado'):
+                self.role_information = Player.DESPERADO_INACTIVE
+        super(Player, self).save(force_insert=force_insert, force_update=force_update, using=using,
+                                 update_fields=update_fields)
 
     def can_make_kills(self):
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
@@ -250,7 +264,7 @@ class Player(models.Model):
         # TODO implement poison
 
         if self.role == Role.objects.get(name__iexact="Desperado"):
-            if self.role_information == DESPERADO_DAYS + 1:
+            if self.role_information == DESPERADO_DAYS:
                 return "Desperation (day %d)" % self.game.current_day
         elif self.role == Role.objects.get(name__iexact="Gay knight"):
             if not self.gn_partner.alive:
@@ -263,7 +277,7 @@ class Player(models.Model):
     def increment_day(self):
         """Called when the day ends by the Game object. Deaths are handled separately by dies_tonight()"""
         if self.role == Role.objects.get(name__iexact="Desperado"):
-            if self.role_information:
+            if self.role_information >= Player.DESPERADO_ACTIVATING:
                 self.role_information += 1
 
         self.save()
