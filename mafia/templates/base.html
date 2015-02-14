@@ -5,10 +5,11 @@
     <title>{% block "title" %}Mafia {{ player.game.name }}{% endblock %}</title>
 </head>
 <body>
-You are logged in as <b>{{ player.username }}</b> (<a href="{% url 'logout' %}">Log out</a>).
+<div id="identification"><p>
+    You are logged in as <b>{{ player.username }}</b> (<a href="{% url 'logout' %}">Log out</a>).
 Your role is <b>{{ player.role.name }}</b>.
 Today is <b>day {{ player.game.current_day }}</b> of <b>{{ player.game.name }}</b>.
-
+</p></div>
 
 {% block "main" %} {% endblock %}
 

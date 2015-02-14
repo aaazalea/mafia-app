@@ -44,6 +44,9 @@ class Game(models.Model):
         self.current_day += 1
         self.save()
 
+    def has_user(self, user):
+        return self.player_set.filter(user=user).exists()
+
     def get_lynch(self, day):
         """
         :param day: The day whose lynch is being found
@@ -283,8 +286,8 @@ class Player(models.Model):
         self.save()
 
     def get_username(self):
+        # TODO switch to ForumUsername
         return self.user.username
-
     username = property(get_username)
 
 
@@ -353,6 +356,12 @@ class Investigation(models.Model):
         return self.death.murderer == self.guess and self.death.is_investigable(self.investigation_type)
 
     correct = property(is_correct)
+
+    def type_name(self):
+        for kind, name in Investigation.INVESTIGATION_KINDS:
+            if kind == self.investigation_type:
+                return name
+        return "???????"
 
 
 class LynchVote(models.Model):

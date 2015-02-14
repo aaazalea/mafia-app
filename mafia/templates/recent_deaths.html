@@ -1,12 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title>Recent Deaths - Mafia</title>
-</head>
-<body>
-<table border="1">
-    <tr>
+{% extends "base.html" %}
+{% block "title" %} Recent Deaths - Mafia {{ player.game.name }} {% endblock %}
+
+
+{% block "main" %}
+
+    <table border="1">
+        <tr>
+            <th colspan="4">Recent Deaths</th>
+        </tr>
+        <tr>
         <th>Killed</th>
         <th>Where/How</th>
         <th>When</th>
@@ -25,5 +27,4 @@
         </tr>
     {% endfor %}
 </table>
-</body>
-</html>
+{% endblock %}

@@ -28,10 +28,11 @@ def death_report(request):
 
     else:
         try:
-            if Player.objects.get(user=request.user, game__active=True).is_alive():
+            me = Player.objects.get(user=request.user, game__active=True)
+            if me.is_alive():
                 form = DeathReportForm()
 
-                return render(request, 'death_report.html', {'form': form})
+                return render(request, 'death_report.html', {'form': form, 'player': me})
             else:
                 return HttpResponse("You're dead already")
         except:
@@ -67,7 +68,11 @@ def recent_deaths(request):
     game = Game.objects.get(active=True)
     is_god = request.user == game.god
     recents = Death.objects.filter(murderee__game__active=True).order_by('-when')
-    return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents})
+    if game.has_user(request.user):
+        player = Player.objects.get(user=request.user, game=game)
+    else:
+        player = {'game': game, 'username': request.user.username, 'role': {'name': "Guest"}}
+    return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents, 'player': player})
 
 @login_required
 def your_role(request):
@@ -89,10 +94,15 @@ def your_role(request):
             "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
                 'go_desperado'), "Go desperado"))
     current_lynch_vote = player.lynch_vote_made(game.current_day)
+
+    recents = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
+
+
     return render(request, 'your_role.html',
                   {'links': links,
                    'vote': current_lynch_vote,
-                   'player': player})
+                   'player': player,
+                   'recent_deaths': recents})
 
 
 @login_required
@@ -106,7 +116,8 @@ def investigation_form(request):
             if player.can_investigate(form.data['investigation_type'], death):
                 guess = Player.objects.get(id=form.data['guess'])
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
-                                                             investigation_type=form.data['investigation_type'])
+                                                             investigation_type=form.data['investigation_type'],
+                                                             day=game.current_day)
                 if investigation.is_correct():
                     return HttpResponse("Correct. <b>%s</b> killed <b>%s</b>. <a href='%s'>Return</a>"
                                         % (guess.user.username, death.murderee.user.username, reverse('index')))

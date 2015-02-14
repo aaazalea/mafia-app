@@ -1,26 +1,80 @@
 {% extends "base.html" %}
 
 {% block "main" %}
-<p>
-    {{ player.role.description }}
-</p>
-<p>
-    {{ player.additional_info|safe }}
-</p>
+    <p>
+        {{ player.role.description }}
+    </p>
+    <p>
+        {{ player.additional_info|safe }}
+    </p>
+    {% if player.investigation_set.all %}
+        <p>
+        <table border="2">
+            <tr>
+                <th colspan="5">Your investigations</th>
+            </tr>
+            <tr>
+                <th>Day</th>
+                <th>Death</th>
+                <th>Investigation Type</th>
+                <th>Guess</th>
+                <th>Result</th>
+            </tr>
+            {% for investigation in player.investigation_set.all %}
+                <tr>
+                    <td>{{ investigation.day }}</td>
+                    <td>{{ investigation.death.murderee.username }}</td>
+                    <td>{{ investigation.type_name }}</td>
+                    <td>{{ investigation.guess.username }}</td>
+                    <td>{% if investigation.correct %}Guilty{% else %}Innocent{% endif %}
 
-<p>
-    {% if player.is_alive %}
-        {% for link in links %}
-            <a href="{{ link.0 }}">{{ link.1 }}</a><br>
-        {% endfor %}
-        {% if vote %}
-            Today, you voted to lynch <b>{{ vote.user.username }}</b> (<a href="{% url "vote" %}">Change</a>).
-        {% else %}
-            <a href="{% url 'vote' %}">Click here to vote for a person to lynch.</a>
-        {% endif %}
-    {% else %}
-        You're dead. You can't do anything in game. Move on with your life.
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+        </p>
     {% endif %}
 
-</p>
+
+    <p>
+        {% if player.is_alive %}
+            {% for link in links %}
+                <a href="{{ link.0 }}">{{ link.1 }}</a><br>
+            {% endfor %}
+            {% if vote %}
+                Today, you voted to lynch <b>{{ vote.user.username }}</b> (<a href="{% url "vote" %}">Change</a>).
+            {% else %}
+                <a href="{% url 'vote' %}">Click here to vote for a person to lynch.</a>
+            {% endif %}
+        {% else %}
+            You're dead. You can't do anything in game. Move on with your life.
+        {% endif %}
+
+    </p>
+    <p>
+    <table border="1">
+        <tr>
+            <th colspan="4">Recent Deaths (<a href="{% url 'recent_deaths' %}">view all</a>)</th>
+        </tr>
+        <tr>
+            <th>Killed</th>
+            <th>Where/How</th>
+            <th>When</th>
+            {% if god %}
+                <th>By whom</th>
+            {% endif %}
+        </tr>
+        {% for death in recent_deaths %}
+            <tr>
+                <td>{{ death.murderee.user.username }}</td>
+                <td>{{ death.where }}</td>
+                <td>{{ death.when|date:"M d, P" }}</td>
+                {% if god %}
+                    <td>{{ death.murderer.user.username }}</td>
+                {% endif %}
+            </tr>
+        {% endfor %}
+    </table>
+
+    </p>
 {% endblock %}
