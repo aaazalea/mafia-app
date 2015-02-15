@@ -3,24 +3,10 @@
 {% load mafia_extras %}
 {% block title %}Home{% endblock %}
 
-{% block actions %}
-    {% if player.is_alive %}
-        {% for link in links %}
-            <li><a href="{{ link.0 }}">{{ link.1 }}</a></li>
-        {% endfor %}
-    {% else %}
-        <li class="navbar-text">You're dead. You can't do anything in game. Move on with your life.</li>
-    {% endif %}
-{% endblock %}
+
 
 
 {% block main %}
-    <p>
-        {{ player.role.description }}
-    </p>
-    <p>
-        {{ player.additional_info|safe }}
-    </p>
     {% if player.investigation_set.all %}
         <p>
         <table class="table table-bordered">

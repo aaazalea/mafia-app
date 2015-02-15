@@ -31,13 +31,15 @@
                             <span class="caret"></span></a>
                         <ul class="dropdown-menu" role="menu">
                             {% block actions %}
-                                <li><a href="#">Action</a></li>
-                                <li><a href="#">Another action</a></li>
-                                <li><a href="#">Something else here</a></li>
-                                <li class="divider"></li>
-                                <li><a href="#">Separated link</a></li>
-                                <li class="divider"></li>
-                                <li><a href="#">One more separated link</a></li>
+                                {% if player.is_alive %}
+                                    {% for link in player.get_links %}
+                                        <li><a href="{{ link.0 }}">{{ link.1 }}</a></li>
+                                    {% endfor %}
+                                {% else %}
+                                    <li class="navbar-text">You're dead. You can't do anything in game. Move on with
+                                        your life.
+                                    </li>
+                                {% endif %}
                             {% endblock %}
                         </ul>
                     </li>

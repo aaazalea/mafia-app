@@ -10,7 +10,22 @@ from django.core.urlresolvers import reverse
 
 
 def index(request):
-    return HttpResponseRedirect('/your-role')
+    if request.user.username == "admin":
+        return HttpResponseRedirect("/admin")
+    game = Game.objects.get(active=True)
+    try:
+        player = Player.objects.get(game=game, user=request.user)
+    except Player.DoesNotExist:
+        # TODO implement spectator
+        return HttpResponse("You're not playing in this game. <a href='/logout'>Please log out and try again.</a>")
+
+    current_lynch_vote = player.lynch_vote_made(game.current_day)
+    recents = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
+
+    return render(request, 'index.html',
+                  {'vote': current_lynch_vote,
+                   'player': player,
+                   'recent_deaths': recents})
 
 
 @login_required
@@ -59,10 +74,11 @@ def kill_report(request):
             return HttpResponseRedirect("/")
 
     else:
-        if Player.objects.get(user=request.user, game__active=True).is_alive():
+        player = Player.objects.get(user=request.user, game__active=True)
+        if player.is_alive():
             form = KillReportForm()
 
-            return render(request, 'kill_report.html', {'form': form})
+            return render(request, 'kill_report.html', {'form': form, 'player': player})
         else:
             messages.add_message(request, messages.ERROR, "You're dead already")
             return HttpResponseRedirect("/")
@@ -82,33 +98,21 @@ def recent_deaths(request):
 
 @login_required
 def your_role(request):
-    if request.user.username == "admin":
-        return HttpResponseRedirect("/admin")
     game = Game.objects.get(active=True)
+    if request.user == game.god:
+        # TODO What should this page return?
+        pass
     try:
         player = Player.objects.get(game=game, user=request.user)
     except Player.DoesNotExist:
-        # TODO implement spectator
-        return HttpResponse("You're not playing in this game. <a href='/logout'>Please log out and try again.</a>")
-    additional_info = player.additional_info()
-    links = [(reverse('death_report'), "I died.")]
-    if player.can_make_kills():
-        links.append((reverse('kill_report'), "Report a kill you made"))
-    if player.can_investigate():
-        links.append((reverse('investigation_form'), "Make an investigation"))
-    if player.role == Role.objects.get(name="Desperado") and player.role_information == Player.DESPERADO_INACTIVE:
-        links.append((
-            "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
-                'go_desperado'), "Go desperado"))
-    current_lynch_vote = player.lynch_vote_made(game.current_day)
+        messages.add_message(request, messages.ERROR, "You aren't playing, so you can't go to your role page.")
+        return HttpResponseRedirect("/")
 
+    current_lynch_vote = player.lynch_vote_made(game.current_day)
     recents = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
 
-    return render(request, 'index.html',
-                  {'links': links,
-                   'vote': current_lynch_vote,
-                   'player': player,
-                   'recent_deaths': recents})
+    return render(request, 'your_role.html',
+                  {'player': player})
 
 
 @login_required

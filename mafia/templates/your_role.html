@@ -1,10 +1,17 @@
-<!DOCTYPE html>
-<html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title></title>
-</head>
-<body>
+{% extends "base.html" %}
 
-</body>
-</html>
+{% load mafia_extras %}
+{% block title %}Your Role{% endblock %}
+
+
+
+
+{% block main %}
+    <h2>Your role is {{ player.role }}</h2>
+    <p>
+        {{ player.role.description }}
+    </p>
+    <p>
+        {{ player.additional_info|safe }}
+    </p>
+{% endblock %}

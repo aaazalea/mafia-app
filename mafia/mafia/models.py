@@ -1,4 +1,5 @@
 import random
+from django.core.urlresolvers import reverse
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -186,7 +187,9 @@ class Player(models.Model):
                 return "You decided to go desperado on day <b>%d</b>. You die at day end on day <b>%d</b>" % (
                     (self.game.current_day - self.role_information),
                     (self.game.current_day + DESPERADO_DAYS - self.role_information))
-
+        elif self.role == Role.objects.get(name__iexact="mafia"):
+            return "Your fellow mafia are: <ul>%s</ul>" % "".join(
+                "<li>%s</li>" % m.username for m in Player.objects.filter(game=self.game, role=self.role) if m != self)
         else:
             return ""
 
@@ -310,6 +313,18 @@ class Player(models.Model):
         return self.user.username
 
     username = property(get_username)
+
+    def get_links(self):
+        links = [(reverse('death_report'), "I died.")]
+        if self.can_make_kills():
+            links.append((reverse('kill_report'), "Report a kill you made"))
+        if self.can_investigate():
+            links.append((reverse('investigation_form'), "Make an investigation"))
+        if self.role == Role.objects.get(name="Desperado") and self.role_information == Player.DESPERADO_INACTIVE:
+            links.append((
+                "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
+                    'go_desperado'), "Go desperado"))
+        return links
 
 
 class Death(models.Model):
