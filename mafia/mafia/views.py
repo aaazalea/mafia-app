@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from django.contrib import messages
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
@@ -20,6 +21,9 @@ def death_report(request):
             where = form.data['where']
             killer = Player.objects.get(id=form.data['killer'])
             killed = Player.objects.get(user=request.user, game__active=True)
+            if not killed.alive:
+                messages.add_message(request, messages.WARNING, "You're already dead.")
+                return HttpResponseRedirect("/")
             when = datetime.now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
             Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, where=where,
@@ -35,7 +39,8 @@ def death_report(request):
             form = DeathReportForm()
             return render(request, 'death_report.html', {'form': form, 'player': me})
         else:
-            return HttpResponse("You're dead already")
+            messages.add_message(request, messages.ERROR, "You're dead already")
+            return HttpResponseRedirect("/")
 
 
 @login_required
@@ -59,7 +64,8 @@ def kill_report(request):
 
             return render(request, 'kill_report.html', {'form': form})
         else:
-            return HttpResponse("You're dead already")
+            messages.add_message(request, messages.ERROR, "You're dead already")
+            return HttpResponseRedirect("/")
 
 
 @login_required
@@ -73,6 +79,7 @@ def recent_deaths(request):
         player = {'game': game, 'username': request.user.username, 'role': {'name': "Guest"}}
     return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents, 'player': player})
 
+
 @login_required
 def your_role(request):
     if request.user.username == "admin":
@@ -80,7 +87,8 @@ def your_role(request):
     game = Game.objects.get(active=True)
     try:
         player = Player.objects.get(game=game, user=request.user)
-    except:
+    except Player.DoesNotExist:
+        # TODO implement spectator
         return HttpResponse("You're not playing in this game. <a href='/logout'>Please log out and try again.</a>")
     additional_info = player.additional_info()
     links = [(reverse('death_report'), "I died.")]
@@ -117,22 +125,25 @@ def investigation_form(request):
                                                              investigation_type=form.data['investigation_type'],
                                                              day=game.current_day)
                 if investigation.is_correct():
-                    return HttpResponse("Correct. <b>%s</b> killed <b>%s</b>. <a href='%s'>Return</a>"
-                                        % (guess.user.username, death.murderee.user.username, reverse('index')))
+                    messages.add_message(request, messages.SUCCESS, "Correct. <b>%s</b> killed <b>%s</b>."
+                                         % (guess.user.username, death.murderee.user.username))
                 else:
-                    return HttpResponse(
-                        "Your investigation turns up nothing. <b>%s</b> did not kill <b>%s</b>. <a href='%s'>Return</a>" % (guess.user.username, death.murderee.user.username, reverse('index')))
+                    messages.add_message(request, messages.WARNING,
+                                         "Your investigation turns up nothing. <b>%s</b> did not kill <b>%s</b>." % (
+                                             guess.user.username, death.murderee.user.username, reverse('index')))
+                return HttpResponseRedirect("/")
             else:
-                return HttpResponse("You can't use that kind of investigation.")
+                messages.add_message(request, messages.ERROR, "You can't use that kind of investigation.")
         else:
-            return HttpResponse("Invalid investigation. <a href=\"%s\"> Try again</a>" % reverse('investigation_form'))
-    else:
-        if Player.objects.get(user=request.user, game__active=True).is_alive():
-            form = InvestigationForm()
+            messages.add_message(request, messages.ERROR, "Invalid investigation.Please try again.")
+    if Player.objects.get(user=request.user, game__active=True).is_alive():
+        form = InvestigationForm()
 
-            return render(request, 'investigation_form.html', {'form': form})
-        else:
-            return HttpResponse("You're dead already")
+        return render(request, 'investigation_form.html', {'form': form})
+    else:
+        messages.add_message(request, messages.ERROR, "Dead people can't make investigations.")
+        return HttpResponseRedirect("/")
+
 
 @login_required
 def daily_lynch(request, day):
@@ -145,8 +156,10 @@ def daily_lynch(request, day):
     day = int(day)
 
     if day >= game.current_day:
-        return HttpResponse(
-            "It's only day <b>%d</b>, you can't see day <b>%d</b>'s lynch yet." % (game.current_day, day))
+        messages.add_message(request, messages.ERROR,
+                             "It's only day <b>%d</b>, you can't see day <b>%d</b>'s lynch yet." % (
+                                 game.current_day, day))
+        return HttpResponseRedirect('/')
 
     lynches, choices = game.get_lynch(day)
 
@@ -184,7 +197,9 @@ def lynch_vote(request):
 
             return render(request, 'lynch_vote.html', {'form': form, 'player': player})
     else:
-        return HttpResponse("Dead people don't vote. :(")
+        messages.add_message(request, messages.ERROR, "Dead people don't vote. :(")
+        return HttpResponseRedirect("/")
+
 
 @login_required
 def item(request, id, password):
@@ -193,14 +208,16 @@ def item(request, id, password):
         return HttpResponseNotFound
     else:
         player = Player.objects.get(user=request.user, game__active=True)
-        if player == item.owner:
-            # Using the item
-            return HttpResponse("Using items is not yet implemented.")
-        else:
+        if player != item.owner:
             old_owner = item.owner
             item.owner = player
-            return HttpResponse("You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (
-                item.name, old_owner.username))
+            messages.add_message(request, messages.SUCCESS,
+                                 "You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (
+                                     item.name, old_owner.username))
+
+        # using the item
+        return HttpResponse("Using items is not yet implemented.")
+
 
 def sign_up(request):
     pass
