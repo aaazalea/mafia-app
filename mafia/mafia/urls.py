@@ -1,4 +1,6 @@
 from django.conf.urls import patterns, include, url
+from django.conf.urls.static import static
+from django.conf import settings
 from django.contrib import admin
 
 urlpatterns = patterns('',
@@ -17,4 +19,4 @@ urlpatterns = patterns('',
     url(r'^item/(?P<id>\d+)/(?P<password>\d+)', 'mafia.views.item', name='item'),
     url(r'^go-desperado/$', 'mafia.views.go_desperado', name='go_desperado'),
     url(r'^admin/', include(admin.site.urls)),
-)
+) + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

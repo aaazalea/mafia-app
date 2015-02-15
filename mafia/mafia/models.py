@@ -33,17 +33,28 @@ class Game(models.Model):
             if Death.objects.filter(murderer__game=self).exists():
                 lynches, choices = self.get_lynch(self.current_day)
                 for lynched in lynches:
-                    Death.objects.create(murderee=lynched, when=datetime.now(), day=self.current_day,
-                                         where="Lynch (day %d)" % self.current_day)
+                    self.kill_day_end(lynched, "Lynch (day %d)" % self.current_day)
+
+            # note that end-of-day deaths happen *after* lynches
             for player in self.living_players:
                 why = player.dies_tonight()
                 if why:
-                    Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
+                    self.kill_day_end(player, why)
+
                 player.increment_day()
 
         self.current_day += 1
         self.save()
 
+    def kill_day_end(self, player, why):
+        Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
+
+        # redistribute items
+        # TODO announce/notify the redistribution
+        for item in player.item_set:
+            recipient = random.choice(self.living_players.all())
+            item.owner = recipient
+            item.save()
     def has_user(self, user):
         return self.player_set.filter(user=user).exists()
 
@@ -54,14 +65,13 @@ class Game(models.Model):
                  list of tuples (lynchee, num votes)
         """
         # TODO tiebreaker logic
-        # TODO mayoral x3
         choices = []
-        for player in self.living_players:
+        for player in self.player_set.all():
             votes = player.lynch_votes_for(day)
             if votes:
-                choices.append((player, votes))
+                choices.append((player, votes, sum(v.value for v in votes)))
         if choices:
-            choices.sort(key=lambda c: -len(c[1]))
+            choices.sort(key=lambda c: -c[2])
             lynches = (choices[0][0],)
 
             return lynches, choices
@@ -224,7 +234,7 @@ class Player(models.Model):
         # TODO implement police officer
         return False
 
-    def save(self, force_insert=False, force_update=False, using=None, update_fields=None):
+    def save(self, *args, **kwargs):
         if self.role_information is None:
             if self.role == Role.objects.get(name__iexact='rogue'):
                 self.role_information = random.randint(1, ROGUE_KILL_WAIT + 1)
@@ -232,8 +242,7 @@ class Player(models.Model):
                 self.role_information = Player.SUPERHERO_IDENTITY
             if self.role == Role.objects.get(name__iexact='Desperado'):
                 self.role_information = Player.DESPERADO_INACTIVE
-        super(Player, self).save(force_insert=force_insert, force_update=force_update, using=using,
-                                 update_fields=update_fields)
+        super(Player, self).save(*args, **kwargs)
 
     def can_make_kills(self):
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
@@ -253,15 +262,22 @@ class Player(models.Model):
                 investigations = Investigation.objects.filter(investigator=self)
 
     def lynch_votes_for(self, day):
-        return [player for player in Player.objects.filter(game__active=True) if player.lynch_vote_made(day) == self]
-
+        votes = []
+        for player in Player.objects.filter(game=self.game):
+            pl_vote = player.lynch_vote_made(day)
+            if pl_vote:
+                if pl_vote.lynchee == self:
+                    votes.append(pl_vote)
+        return votes
     def lynch_vote_made(self, day):
         votes = LynchVote.objects.filter(voter=self, day=day).order_by('-time_made')
         if votes:
-            return votes[0].lynchee
+            return votes[0]
         else:
             return None
 
+    def has_ever_lynched(self):
+        return LynchVote.objects.filter(voter=self).exists()
 
     def dies_tonight(self):
         # TODO implement poison
@@ -369,6 +385,13 @@ class LynchVote(models.Model):
     lynchee = models.ForeignKey(Player, related_name="lynch_votes_received")
     time_made = models.DateTimeField()
     day = models.IntegerField()
+    value = models.IntegerField(default=1)
+
+    def __str__(self):
+        if self.value == 1:
+            return "%s (day %d)" % (self.lynchee, self.day)
+        else:
+            return "%s x%d (day %d)" % (self.lynchee, self.value, self.day)
 
 
 class Item(models.Model):

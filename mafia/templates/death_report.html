@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% block "title" %}I died - Mafia {{ player.game.name }}{% endblock %}
+{% block "title" %}I Died - Mafia {{ player.game.name }}{% endblock %}
 
 {% block "main" %}
     <form action="{%  url 'death_report' %}" method="post">
         {% csrf_token %}
         <table>
             {{ form }}
+        </table>
     </form>
 	<input type="submit" value="Submit" />
 

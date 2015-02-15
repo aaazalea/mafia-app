@@ -63,15 +63,15 @@ WSGI_APPLICATION = 'mafia.wsgi.application'
 # https://docs.djangoproject.com/en/1.7/ref/settings/#databases
 if PRODUCTION:
     DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'jakobw+mafia-app',
-        'USER': 'jakobw',
-        'PASSWORD': 'vec67dav',
-        'HOST': 'sql.mit.edu',   # Or an IP Address that your DB is hosted on
-        'PORT': '3306',
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': 'jakobw+mafia-app',
+            'USER': 'jakobw',
+            'PASSWORD': 'vec67dav',
+            'HOST': 'sql.mit.edu',  # Or an IP Address that your DB is hosted on
+            'PORT': '3306',
+        }
     }
-}
 else:
 
     DATABASES = {
@@ -100,7 +100,10 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-
+STATICFILES_DIRS = (
+    os.path.join(BASE_DIR, "static"),
+    '/var/www/static/',
+)
 
 # Mafia
 

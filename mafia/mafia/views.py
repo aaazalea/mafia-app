@@ -143,6 +143,13 @@ def daily_lynch(request, day):
     # TODO mayor triple vote
     game = Game.objects.get(active=True)
 
+    # parameters from URLs are *strings* by default
+    day = int(day)
+
+    if day >= game.current_day:
+        return HttpResponse(
+            "It's only day <b>%d</b>, you can't see day <b>%d</b>'s lynch yet." % (game.current_day, day))
+
     lynches, choices = game.get_lynch(day)
 
     if len(lynches) == 0:
@@ -167,8 +174,12 @@ def lynch_vote(request):
         if request.method == "POST":
             form = LynchVoteForm(request.POST)
             if form.is_valid():
-                vote = Player.objects.get(id=form.data["vote"])
-                LynchVote.objects.create(voter=player, lynchee=vote, time_made=datetime.now(), day=game.current_day)
+                vote_value = Player.objects.get(id=form.data["vote"])
+                vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=datetime.now(),
+                                                day=game.current_day)
+                if player.elected_roles.filter(name="Mayor").exists():
+                    vote.value = 3
+                    vote.save()
                 return HttpResponseRedirect("/")
         else:
             form = LynchVoteForm()

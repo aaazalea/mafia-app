@@ -1,5 +1,7 @@
 <!DOCTYPE html>
+{% load staticfiles %}
 <html>
+<link rel="stylesheet" type="text/css" href="{% static "/static/mafia.css" %}"/>
 <head lang="en">
     <meta charset="UTF-8">
     <title>{% block "title" %}Mafia {{ player.game.name }}{% endblock %}</title>
