@@ -11,6 +11,7 @@ class Game(models.Model):
     archived = models.BooleanField(default=False)
     name = models.CharField(max_length=30)
     current_day = models.IntegerField(default=0)
+    rules_url = models.URLField()
 
     def __str__(self):
         return self.name
@@ -51,7 +52,7 @@ class Game(models.Model):
 
         # redistribute items
         # TODO announce/notify the redistribution
-        for item in player.item_set:
+        for item in player.item_set.all():
             recipient = random.choice(self.living_players.all())
             item.owner = recipient
             item.save()

@@ -1,18 +1,3 @@
-<!DOCTYPE html>
-<html>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title>Investigation - Mafia</title>
-</head>
-<body>
-
-<form action="{% url 'investigation_form' %}" method="post">
-	{% csrf_token %}
-	{{ form }}
-	<input type="submit" value="Submit" />
-</form>
-
-
-
-</body>
-</html>
+{% extends "form.html" %}
+{% block title %}Investigation{% endblock %}
+{% block url %}{% url 'investigation_form' %}{% endblock %}

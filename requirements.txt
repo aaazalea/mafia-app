@@ -3,3 +3,5 @@ django-extensions==1.4.9
 django-registration==1.0
 six==1.9.0
 wsgiref==0.1.2
+django-admin-bootstrapped=2.3.3
+django-bootstrap3=5.1.1

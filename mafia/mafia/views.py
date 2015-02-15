@@ -29,14 +29,13 @@ def death_report(request):
     else:
         try:
             me = Player.objects.get(user=request.user, game__active=True)
-            if me.is_alive():
-                form = DeathReportForm()
-
-                return render(request, 'death_report.html', {'form': form, 'player': me})
-            else:
-                return HttpResponse("You're dead already")
-        except:
+        except Player.DoesNotExist:
             return HttpResponse("You don't have a role in any currently active game.")
+        if me.is_alive():
+            form = DeathReportForm()
+            return render(request, 'death_report.html', {'form': form, 'player': me})
+        else:
+            return HttpResponse("You're dead already")
 
 
 @login_required
@@ -97,8 +96,7 @@ def your_role(request):
 
     recents = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
 
-
-    return render(request, 'your_role.html',
+    return render(request, 'index.html',
                   {'links': links,
                    'vote': current_lynch_vote,
                    'player': player,

@@ -1,19 +1,75 @@
-<!DOCTYPE html>
+{% extends "basebase.html" %}
 {% load staticfiles %}
-<html>
-<link rel="stylesheet" type="text/css" href="{% static "/static/mafia.css" %}"/>
-<head lang="en">
-    <meta charset="UTF-8">
-    <title>{% block "title" %}Mafia {{ player.game.name }}{% endblock %}</title>
-</head>
-<body>
-<div id="identification"><p>
-    You are logged in as <b>{{ player.username }}</b> (<a href="{% url 'logout' %}">Log out</a>).
-Your role is <b>{{ player.role.name }}</b>.
-Today is <b>day {{ player.game.current_day }}</b> of <b>{{ player.game.name }}</b>.
-</p></div>
+{% load bootstrap3 %}
+{% bootstrap_css %}
+{% bootstrap_javascript %}
 
-{% block "main" %} {% endblock %}
+
+{% block bootstrap3_content %}
+    <nav class="navbar navbar-default">
+        <div class="container-fluid">
+            <!-- Brand and toggle get grouped for better mobile display -->
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse"
+                        data-target="#bs-example-navbar-collapse-1">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/">Mafia</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                <ul class="nav navbar-nav">
+                    <li><a href="http://mafia.mit.edu">Forums </a></li>
+                    <li><a href="#">Player Intros</a></li>
+                    <li><a href="{{ player.game.rules_url }}">Rules</a></li>
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">Actions
+                            <span class="caret"></span></a>
+                        <ul class="dropdown-menu" role="menu">
+                            {% block actions %}
+                                <li><a href="#">Action</a></li>
+                                <li><a href="#">Another action</a></li>
+                                <li><a href="#">Something else here</a></li>
+                                <li class="divider"></li>
+                                <li><a href="#">Separated link</a></li>
+                                <li class="divider"></li>
+                                <li><a href="#">One more separated link</a></li>
+                            {% endblock %}
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="nav navbar-nav navbar-right">
+                    <li class="navbar-text">Day <b>{{ player.game.current_day }}</b> of <b>{{ player.game.name }}</b>
+                    </li>
+                    <li class="dropdown">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-expanded="false">Logged
+                            in as <b>{{ player.username }}</b> <span class="caret"></span></a>
+                        <ul class="dropdown-menu" role="menu">
+                            <li><a href="{% url "your_role" %}"> Your role: <b>{{ player.role.name }}</b></a></li>
+                            <li><a href="{% url "logout" %}">Log out</a></li>
+                            <li class="divider"></li>
+                            <li><a href="#">Separated link</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+            <!-- /.navbar-collapse -->
+        </div>
+        <!-- /.container-fluid -->
+    </nav>
+    <div class="container">
+        <h1>{% block title %}(no title){% endblock %}</h1>
+
+        {% bootstrap_messages %}
+
+
+        {% block main %} {% endblock %}
+    </div>
+{% endblock %}
 
 </body>
 </html>

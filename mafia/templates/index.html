@@ -1,8 +1,20 @@
 {% extends "base.html" %}
 
 {% load mafia_extras %}
+{% block title %}Home{% endblock %}
 
-{% block "main" %}
+{% block actions %}
+    {% if player.is_alive %}
+        {% for link in links %}
+            <li><a href="{{ link.0 }}">{{ link.1 }}</a></li>
+        {% endfor %}
+    {% else %}
+        <li class="navbar-text">You're dead. You can't do anything in game. Move on with your life.</li>
+    {% endif %}
+{% endblock %}
+
+
+{% block main %}
     <p>
         {{ player.role.description }}
     </p>
@@ -11,9 +23,9 @@
     </p>
     {% if player.investigation_set.all %}
         <p>
-        <table border="1">
-        <tr>
-                <th colspan="5">Your investigations</th>
+        <table class="table table-bordered">
+            <tr>
+            <th colspan="5">Your investigations</th>
             </tr>
             <tr>
                 <th>Day</th>
@@ -37,47 +49,40 @@
         </p>
     {% endif %}
 
-    {% if player.has_ever_lynched %}
-        <p>
-        <table border="1">
-            <tr>
-                <th colspan="3">Your Lynch Vote History</th>
-            </tr>
-            <tr>
-                <th>Day</th>
-                <th>Your Vote</th>
-                <th>Lynch Result</th>
-            </tr>
-            {% for day in player.game.current_day|get_xrange1 %}
-                <tr>
-                    <td>{{ day }}</td>
-                    <td>{{ player|get_vote:day }}</td>
-                    <td><a href="{% url 'daily_lynch' day %}">{{ player.game|get_lynch:day }}</a></td>
-                </tr>
-            {% endfor %}
-
-        </table>
-        </p>
-    {% endif %}
-
     <p>
-        {% if player.is_alive %}
-            {% for link in links %}
-                <a href="{{ link.0 }}">{{ link.1 }}</a><br>
-            {% endfor %}
-            {% if vote %}
-                Today, you voted to lynch <b>{{ vote.lynchee.username }}</b> (<a href="{% url "vote" %}">Change</a>).
-            {% else %}
-                <a href="{% url 'vote' %}">Click here to vote for a person to lynch.</a>
-            {% endif %}
-        {% else %}
-            You're dead. You can't do anything in game. Move on with your life.
-        {% endif %}
-
-    </p>
-    <p>
-    <table border="1">
+    <table class="table table-bordered">
         <tr>
+            <th colspan="3">Your Lynch Vote History</th>
+        </tr>
+        <tr>
+            <th>Day</th>
+            <th>Your Vote</th>
+            <th>Lynch Result</th>
+        </tr>
+        {% for day in player.game.current_day|get_xrange1 %}
+            {% if day != player.game.current_day or player.alive %}
+            <tr>
+                <td>{{ day }}</td>
+                <td>{% if day != player.game.current_day %}{{ player|get_vote:day }}{% else %}            {% if vote %}
+                    Today, you voted to lynch <b>{{ vote.lynchee.username }}</b> (<a href="{% url "vote" %}">Change</a>
+                    ).
+                {% else %}
+                    <a href="{% url 'vote' %}">Click here to vote for a person to lynch.</a>
+                {% endif %}
+                {% endif %}</td>
+                <td>{% if day != player.game.current_day %}<a href="{% url 'daily_lynch' day %}">
+                    {{ player.game|get_lynch:day }}</a>{% endif %}</td>
+            </tr>
+            {% endif %}
+        {% endfor %}
+
+    </table>
+    </p>
+
+
+    <p>
+    <table class="table table-bordered">
+    <tr>
             <th colspan="3">Recent Deaths (<a href="{% url 'recent_deaths' %}">view all</a>)</th>
         </tr>
         <tr>

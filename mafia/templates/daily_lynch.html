@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% block "title" %} Day {{ day }} Lynch - Mafia {{ player.game.name }} {% endblock %}
+{% block title %} Day {{ day }} Lynch{% endblock %}
 
 
-{% block "main" %}
+{% block main %}
 
     <h2>{{ lynch_str }}</h2>
 
     {% for choice in choices %}
-        <p><h3>Votes for {{ choice.0.username }} ({{ choice.2 }}):</h3>
-            <ul>
-                {% for vote in choice.1 %}
-                    <li>{{ vote.voter.username }}{% if vote.value != 1 %} (x{{ vote.value }}){% endif %}</li>
-                {% endfor %}
-            </ul>
+        <p><h4>Votes for {{ choice.0.username }} ({{ choice.2 }}):</h4>
+        <ul>
+            {% for vote in choice.1 %}
+                <li>{{ vote.voter.username }}{% if vote.value != 1 %} (x{{ vote.value }}){% endif %}</li>
+            {% endfor %}
+        </ul>
         </p>
     {% endfor %}
 {% endblock %}

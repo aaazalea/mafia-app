@@ -42,4 +42,4 @@ def get_xrange1(value):
 
         Instead of 3 one may use the variable set in the views
     """
-    return xrange(1, value)
+    return xrange(1, value + 1)
