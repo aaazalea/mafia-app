@@ -1,4 +1,5 @@
 import random
+
 from django.db import models
 from django.contrib.auth.models import User
 from mafia.settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS
@@ -56,6 +57,7 @@ class Game(models.Model):
             recipient = random.choice(self.living_players.all())
             item.owner = recipient
             item.save()
+
     def has_user(self, user):
         return self.player_set.filter(user=user).exists()
 
@@ -107,7 +109,7 @@ class Player(models.Model):
     # Nothing:
     # - Innocent child
     # - Mafia
-    #  - Investigator
+    # - Investigator
     #  - Vigilante
 
     # TODO conspiracy theorist list
@@ -270,6 +272,7 @@ class Player(models.Model):
                 if pl_vote.lynchee == self:
                     votes.append(pl_vote)
         return votes
+
     def lynch_vote_made(self, day):
         votes = LynchVote.objects.filter(voter=self, day=day).order_by('-time_made')
         if votes:
@@ -305,6 +308,7 @@ class Player(models.Model):
     def get_username(self):
         # TODO switch to ForumUsername
         return self.user.username
+
     username = property(get_username)
 
 

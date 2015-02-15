@@ -1,23 +1,24 @@
-from models import *
-from django.contrib import admin
-from django.db.models import get_models,get_app
 from random import shuffle
 
-
+from models import *
+from django.contrib import admin
 
 
 admin.site.register(Player)
 
+
 class RoleAdmin(admin.ModelAdmin):
     list_display = ('name', 'description')
 
+
 admin.site.register(Role, RoleAdmin)
+
 
 class DeathAdmin(admin.ModelAdmin):
     list_display = ('murderee', 'murderer', 'when', 'where')
 
 
-admin.site.register(Death,DeathAdmin)
+admin.site.register(Death, DeathAdmin)
 
 
 class PlayerInline(admin.TabularInline):
@@ -26,8 +27,23 @@ class PlayerInline(admin.TabularInline):
     extra = 0
 
 
-
 class GameAdmin(admin.ModelAdmin):
+    def advance_day(self, request, queryset):
+        for g in queryset:
+            g.increment_day()
+        self.message_user(request, "Advanced day(s) successfully")
+
+    advance_day.short_description = "Advance day / Start game"
+
+    def archive_games(self, request, queryset):
+        for g in queryset:
+            g.active = False
+            g.archived = True
+            g.save()
+        self.message_user(request, "Archived game(s) successfully")
+
+    archive_games.short_description = "Archive selected games"
+
     def pair_gay_knights(self, request, queryset):
         for g in queryset:
             gay_knights = Player.objects.filter(
@@ -45,8 +61,7 @@ class GameAdmin(admin.ModelAdmin):
     list_display = ('name', 'active', 'number_of_players', 'number_of_living_players')
     exclude = ('active', 'archived', 'current_day')
     inlines = (PlayerInline,)
-    actions = [pair_gay_knights]
-
+    actions = [advance_day, archive_games, pair_gay_knights]
 
 
 admin.site.register(Game, GameAdmin)
