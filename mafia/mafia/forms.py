@@ -25,7 +25,7 @@ class KillReportForm(forms.Form):
         label='Who did you kill?')
     kaboom = forms.BooleanField(initial=False, required=False,
                                 label="Was a kaboom used?")
-    when = forms.IntegerField(label="How many minutes did this happen?")
+    when = forms.IntegerField(label="How many minutes ago did this happen?")
 
     where = forms.CharField(label='Where did this happen?')
 

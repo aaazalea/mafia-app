@@ -1,31 +1,54 @@
 from datetime import datetime, timedelta
 
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.models import AnonymousUser
+from django.template.response import TemplateResponse
+from django.utils.http import is_safe_url
+from django.shortcuts import resolve_url
+from django.views.decorators.debug import sensitive_post_parameters
+from django.views.decorators.cache import never_cache
+from django.views.decorators.csrf import csrf_protect
+from django.contrib.auth import (REDIRECT_FIELD_NAME, login as auth_login, logout)
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role
+from models import Player, Death, Game, Investigation, LynchVote, Item
 from django.core.urlresolvers import reverse
 
-
 def index(request):
+    params = {}
     if request.user.username == "admin":
         return HttpResponseRedirect("/admin")
-    game = Game.objects.get(active=True)
     try:
-        player = Player.objects.get(game=game, user=request.user)
+        game = Game.objects.get(active=True)
+    except Game.DoesNotExist:
+        logout(request)
+        return HttpResponseRedirect("/accounts/login")
+    try:
+        u = request.user
+        if not isinstance(u, AnonymousUser):
+            player = Player.objects.get(game=game, user=u)
+        else:
+            player = False
+            params['game'] = game
     except Player.DoesNotExist:
-        # TODO implement spectator
-        return HttpResponse("You're not playing in this game. <a href='/logout'>Please log out and try again.</a>")
+        player = False
+        params['user'] = request.user
+        params['game'] = game
+        if game.god == request.user:
+            params['investigations'] = Investigation.objects.filter(investigator__game=game).order_by('-id')
+    if player:
+        params['vote'] = player.lynch_vote_made(game.current_day)
+        params['player'] = player
 
-    current_lynch_vote = player.lynch_vote_made(game.current_day)
-    recents = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
+    params['recent_deaths'] = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
 
     return render(request, 'index.html',
-                  {'vote': current_lynch_vote,
-                   'player': player,
-                   'recent_deaths': recents})
+                  params)
 
 
 @login_required
@@ -84,15 +107,18 @@ def kill_report(request):
             return HttpResponseRedirect("/")
 
 
-@login_required
 def recent_deaths(request):
     game = Game.objects.get(active=True)
     is_god = request.user == game.god
     recents = Death.objects.filter(murderee__game__active=True).order_by('-when')
-    if game.has_user(request.user):
+    if isinstance(request.user, AnonymousUser):
+        return render(request, 'recent_deaths.html',
+                      {'god': is_god, 'deaths': recents, 'game': game, 'user': request.user})
+    elif game.has_user(request.user):
         player = Player.objects.get(user=request.user, game=game)
     else:
-        player = {'game': game, 'username': request.user.username, 'role': {'name': "Guest"}}
+        player = {'god': is_god, 'game': game, 'username': request.user.username,
+                  'role': {'name': "God" if is_god else "Guest"}}
     return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents, 'player': player})
 
 
@@ -134,7 +160,7 @@ def investigation_form(request):
                 else:
                     messages.add_message(request, messages.WARNING,
                                          "Your investigation turns up nothing. <b>%s</b> did not kill <b>%s</b>." % (
-                                             guess.user.username, death.murderee.user.username, reverse('index')))
+                                             guess.user.username, death.murderee.user.username))
                 return HttpResponseRedirect("/")
             else:
                 messages.add_message(request, messages.ERROR, "You can't use that kind of investigation.")
@@ -146,12 +172,15 @@ def investigation_form(request):
         return render(request, 'investigation_form.html', {'form': form})
     else:
         messages.add_message(request, messages.ERROR, "Dead people can't make investigations.")
-        return HttpResponseRedirect("/")
+
+    return HttpResponseRedirect("/")
 
 
-@login_required
 def daily_lynch(request, day):
-    player = Player.objects.get(user=request.user, game__active=True)
+    try:
+        player = Player.objects.get(user=request.user, game__active=True)
+    except Player.DoesNotExist:
+        player = False
     # TODO implement tiebreaker
     # TODO mayor triple vote
     game = Game.objects.get(active=True)
@@ -185,6 +214,10 @@ def daily_lynch(request, day):
 def lynch_vote(request):
     player = Player.objects.get(user=request.user, game__active=True)
     game = player.game
+
+    if not Death.objects.filter(murderer__game=game).exists():
+        messages.add_message(request, messages.INFO, "You can't lynch anyone yet - nobody has been killed.")
+        return HttpResponseRedirect("/")
     if player.is_alive():
         if request.method == "POST":
             form = LynchVoteForm(request.POST)
@@ -235,3 +268,67 @@ def go_desperado(request):
         player.save()
     return HttpResponseRedirect("/")
 
+
+@sensitive_post_parameters()
+@csrf_protect
+@never_cache
+def login(request, template_name='registration/login.html',
+          redirect_field_name=REDIRECT_FIELD_NAME,
+          authentication_form=AuthenticationForm,
+          current_app=None, extra_context=None):
+    """
+    Displays the login form and handles the login action.
+    """
+    if not Game.objects.filter(active=True).exists():
+        return HttpResponse("There is no active mafia game. <a href=\"/admin\">Log in as admin</a>.")
+    redirect_to = request.POST.get(redirect_field_name,
+                                   request.GET.get(redirect_field_name, ''))
+
+    if request.method == "POST":
+        form = authentication_form(request, data=request.POST)
+        if form.is_valid():
+
+            # Ensure the user-originating redirection url is safe.
+            if not is_safe_url(url=redirect_to, host=request.get_host()):
+                redirect_to = resolve_url(settings.LOGIN_REDIRECT_URL)
+
+            # Okay, security check complete. Log the user in.
+            auth_login(request, form.get_user())
+
+            return HttpResponseRedirect(redirect_to)
+    else:
+        form = authentication_form(request)
+
+    current_site = get_current_site(request)
+
+    context = {
+        'form': form,
+        redirect_field_name: redirect_to,
+        'site': current_site,
+        'site_name': current_site.name,
+    }
+    if extra_context is not None:
+        context.update(extra_context)
+    return TemplateResponse(request, template_name, context,
+                            current_app=current_app)
+
+
+@login_required
+def advance_day(request):
+    game = Game.objects.get(active=True)
+    if request.user == game.god:
+        game.increment_day()
+    return HttpResponseRedirect("/")
+
+
+@login_required
+def player_intros(request):
+    game = Game.objects.get(active=True)
+    try:
+        player = game.player_set.get(user=request.user)
+        return render(request, 'introductions.html', {'player': player, 'game': game})
+    except Player.DoesNotExist:
+        if game.god != request.user:
+            return HttpResponse("You must be playing in this game.")
+        else:
+            return render(request, 'introductions.html', {'user': request.user, 'game': game})

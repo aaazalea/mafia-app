@@ -7,6 +7,7 @@
 
 
 {% block main %}
+    {% if player %}
     {% if player.investigation_set.all %}
         <p>
         <table class="table table-bordered">
@@ -33,8 +34,8 @@
             {% endfor %}
         </table>
         </p>
-    {% endif %}
 
+    {% endif %}
     <p>
     <table class="table table-bordered">
         <tr>
@@ -50,7 +51,7 @@
             <tr>
                 <td>{{ day }}</td>
                 <td>{% if day != player.game.current_day %}{{ player|get_vote:day }}{% else %}            {% if vote %}
-                    Today, you voted to lynch <b>{{ vote.lynchee.username }}</b> (<a href="{% url "vote" %}">Change</a>
+                    Today, you voted to lynch <b>{{ vote.lynchee.username }}</b> (<a href="{% url "vote" %}">change</a>
                     ).
                 {% else %}
                     <a href="{% url 'vote' %}">Click here to vote for a person to lynch.</a>
@@ -64,18 +65,42 @@
 
     </table>
     </p>
+    {% else %}
+        <p>
+        <table class="table table-bordered">
+            <tr>
+                <th colspan="2">Lynch Vote History</th>
+            </tr>
+            <tr>
+                <th>Day</th>
+                <th>Lynch Result</th>
+            </tr>
+            {% for day in game.current_day|get_xrange1 %}
+                {% if day != game.current_day %}
+                    <tr>
+                        <td>{{ day }}</td>
+                        <td>{% if day != game.current_day %}<a href="{% url 'daily_lynch' day %}">
+                            {{ game|get_lynch:day }}</a>{% endif %}</td>
+                    </tr>
+                {% endif %}
+            {% endfor %}
+
+        </table>
+        </p>
+
+    {% endif %}
 
 
     <p>
     <table class="table table-bordered">
     <tr>
-            <th colspan="3">Recent Deaths (<a href="{% url 'recent_deaths' %}">view all</a>)</th>
-        </tr>
+        <th colspan="100%">Recent Deaths (<a href="{% url 'recent_deaths' %}">view all</a>)</th>
+    </tr>
         <tr>
             <th>Killed</th>
             <th>Where/How</th>
             <th>When</th>
-            {% if god %}
+            {% if game.god == user %}
                 <th>By whom</th>
             {% endif %}
         </tr>
@@ -84,7 +109,7 @@
                 <td>{{ death.murderee.user.username }}</td>
                 <td>{{ death.where }}</td>
                 <td>{{ death.when|date:"M d, P" }}</td>
-                {% if god %}
+                {% if game.god == user %}
                     <td>{{ death.murderer.user.username }}</td>
                 {% endif %}
             </tr>
@@ -92,7 +117,35 @@
     </table>
 
     </p>
+    {% if investigations %}
+        <p>
+        <table class="table table-bordered">
+            <tr>
+                <th colspan="100%">Investigations</th>
+            </tr>
+            <tr>
+                <th>Investigator</th>
+                <th>Day</th>
+                <th>Death</th>
+                <th>Investigation Type</th>
+                <th>Guess</th>
+                <th>Result</th>
+            </tr>
+            {% for investigation in investigations %}
+                <tr>
+                    <td>{{ investigation.investigator.username }}</td>
+                    <td>{{ investigation.day }}</td>
+                    <td>{{ investigation.death.murderee.username }}</td>
+                    <td>{{ investigation.type_name }}</td>
+                    <td>{{ investigation.guess.username }}</td>
+                    <td>{% if investigation.correct %}Guilty{% else %}Innocent{% endif %}
 
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+        </p>
+    {% endif %}
 
 
 

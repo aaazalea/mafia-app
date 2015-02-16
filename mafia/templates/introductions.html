@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Player Introductions{% endblock %}
+
+
+{% block main %}
+
+    <table class="table">
+        <tr>
+            <th>Player</th>
+            <th>Introduction</th>
+            <th>Picture</th>
+        </tr>
+        {% for p in game.player_set.all %}
+            <tr{% if not p.is_alive %} class="danger"{% endif %}>
+                <td>{{ p.username }}{% if not p.is_alive %} (dead){% endif %}</td>
+                <td>{{ p.introduction }}</td>
+                <td>p.picture</td>
+            </tr>
+        {% endfor %}
+    </table>
+{% endblock %}

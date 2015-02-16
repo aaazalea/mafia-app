@@ -106,6 +106,7 @@ class Player(models.Model):
     role = models.ForeignKey(Role, null=True)
     elected_roles = models.ManyToManyField(ElectedRole, blank=True)
     conscripted = models.BooleanField(default=False)
+    introduction = models.TextField()
 
     # Nothing:
     # - Innocent child
@@ -174,7 +175,7 @@ class Player(models.Model):
             else:
                 return "Your Gay Knight partner has not been assigned yet."
         elif self.role == Role.objects.get(name__iexact="rogue"):
-            if self.rogue_cant_kill:
+            if not self.rogue_cant_kill:
                 return "You are currently permitted to make kills."
             else:
                 return "You are next allowed to kill on <b> day %d</b>." % self.rogue_cant_kill
