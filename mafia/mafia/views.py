@@ -91,8 +91,7 @@ def kill_report(request):
             killer = Player.objects.get(user=request.user, game__active=True)
             when = datetime.now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
-            mtp = 'mtp' in form.data
-            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, mtp=mtp,
+            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
                                  day=Game.objects.get(active=True).current_day, where=where)
             return HttpResponseRedirect("/")
 

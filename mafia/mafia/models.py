@@ -257,7 +257,7 @@ class Player(models.Model):
         elif self.role == Role.objects.get(name__iexact='rogue'):
             return not self.rogue_cant_kill
         elif self.role == Role.objects.get(name__iexact='vigilante'):
-            for kill in self.kills:
+            for kill in self.kills.all():
                 if not kill.murderee.is_evil():
                     return False
                     # TODO implement game days
@@ -460,3 +460,42 @@ class Item(models.Model):
 class ForumUsername(models.Model):
     username = models.CharField(max_length=100)
     user = models.OneToOneField(User)
+
+
+class MafiaPower(models.Model):
+    KABOOM = 1
+    SCHEME = 2
+    POISON = 3
+    SET_A_TRAP = 4
+    SLAUGHTER_THE_WEAK = 5
+    FRAME_A_TOWNSPERSON = 6
+    PLANT_EVIDENCE = 7
+    MANIPULATE_THE_PRESS = 8
+    HIRE_A_HITMAN = 9
+    CONSCRIPTION = 10
+    MAFIA_POWER_TYPE = [
+        (KABOOM, "KABOOM!"),
+        (SCHEME, "Scheme"),
+        (POISON, "Poison"),
+        (SET_A_TRAP, "Set a Trap"),
+        (SLAUGHTER_THE_WEAK, "Slaughter the Weak"),
+        (FRAME_A_TOWNSPERSON, "Frame a Townsperson"),
+        (PLANT_EVIDENCE, "Plant Evidence"),
+        (MANIPULATE_THE_PRESS, "Manipulate the Press"),
+        (HIRE_A_HITMAN, "Hire a Hitman"),
+        (CONSCRIPTION, "Conscription")
+    ]
+
+    target = models.ForeignKey(Player, null=True)
+    day_used = models.IntegerField(null=True)
+    power = models.IntegerField(choices=MAFIA_POWER_TYPE)
+
+    # No meaning except for:
+    # - Frame a townsperson: the id of the death for which they're framed
+    #  - Plant evidence: the id of the role for which evidence is being planted: negative indicates conscripted
+    other_info = models.IntegerField(null=True)
+
+    # hitman name for Hire a Hitman
+    comment = models.CharField(max_length=50)
+
+    game = models.ForeignKey(Game)

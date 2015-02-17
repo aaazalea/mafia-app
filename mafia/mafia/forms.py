@@ -29,9 +29,6 @@ class KillReportForm(forms.Form):
 
     where = forms.CharField(label='Where did this happen?')
 
-    mtp = forms.BooleanField(initial=False, required=False,
-                             label="Manipulate the press?")
-
 
 class DeathModelChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):

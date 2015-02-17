@@ -106,5 +106,22 @@
         },
         "model": "auth.user",
         "pk": 1
+    },
+    {
+        "fields": {
+            "name": "Mayor",
+            "description": "The mayor’s vote counts as three votes. Twice per game, the mayor may ask god how many mafia there are (including conscript, but not including rogues). Once per day, if the mayor hasn’t on the previous day, they may make a single investigation as if they were an investigator, except that they don’t need to study clues."
+        },
+        "model": "mafia.electedrole",
+        "pk": 1
+    },
+    {
+        "fields": {
+            "name": "Police Officer",
+            "description": "At the start of each day, the police officer may designate up to three players to “watch”. If any of these players die on that day, the police officer gains three clues (distinct from all clues at the murder scene) for that player’s death. Once per day, the police officer may make an investigation, as if they were an investigator. You may make other investigations on the same day if you have a role power that allows you to do so. You may share clues between your police officer power and your role power. Whenever the police officer would use “BANG” on someone, they may always choose to use “KABOOM” instead. If a police officer uses “KABOOM” on someone, all that person’s items are destroyed (instead of given to the police officer)."
+        },
+        "model": "mafia.electedrole",
+        "pk": 2
     }
+
 ]
