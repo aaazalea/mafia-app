@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Mafia Powers{% endblock %}
+
+
+{% block main %}
+
+    <table class="table">
+        <tr>
+            <th>Header 1</th>
+            <th>Header 2</th>
+        </tr>
+        {% for p in game.mafiapower_set.all %}
+            {{ p.get_row|safe }}
+        {% endfor %}
+    </table>
+{% endblock %}

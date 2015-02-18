@@ -65,3 +65,43 @@ class SignUpForm(forms.Form):
         queryset=Game.objects.filter(archived=False),
         label="Choose a game to join:"
     )
+
+
+class MafiaPowerForm(forms.Form):
+    target = forms.ModelChoiceField(queryset=Player.objects.filter(game__active=True))
+
+    def __init__(self, request, *args, **kwargs):
+        super(MafiaPowerForm, self).__init__(*args, **kwargs)
+        if 'power_id' in request.GET:
+            power = MafiaPower.objects.get(id=request.GET['power_id'])
+            need = power.needs_extra_field()
+            if need:
+                self.fields['extra_field'] = need
+            self.fields['power_id'] = forms.IntegerField(widget=forms.HiddenInput(), initial=power.id)
+
+    def submit(self):
+        power = MafiaPower.objects.get(id=self.data['power_id'])
+        if power.power == MafiaPower.POISON:
+            person_poisoned = Player.objects.get(id=self.data['target'])
+            pass
+        if power.power == MafiaPower.SET_A_TRAP:
+            person_trapped = Player.objects.get(id=self.data['target'])
+            role_guess = Role.objects.get(id=self.data['extra_field'])
+            pass
+        if power.power == MafiaPower.SLAUGHTER_THE_WEAK:
+            person_slaughtered = Player.objects.get(id=self.data['target'])
+            pass
+        if power.power == MafiaPower.FRAME_A_TOWNSPERSON:
+            person_framed = Player.objects.get(id=self.data['target'])
+            person_killed = Player.objects.get(id=self.data['extra_field'])
+            pass
+        if power.power == MafiaPower.PLANT_EVIDENCE:
+            pass
+        if power.power == MafiaPower.MANIPULATE_THE_PRESS:
+            pass
+        if power.power == MafiaPower.HIRE_A_HITMAN:
+            pass
+        if power.power == MafiaPower.CONSCRIPTION:
+            pass
+
+        return "Power executed successfully: %s" % power.get_power_name()

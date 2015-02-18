@@ -20,5 +20,7 @@ urlpatterns = patterns('',
                        url(r'^go-desperado/$', 'mafia.views.go_desperado', name='go_desperado'),
                        url(r'^player-intros/$', 'mafia.views.player_intros', name='player_intros'),
                        url(r'^advance-day/$', 'mafia.views.advance_day', name='advance_day'),
+                       url(r'^mafia-power-form/$', 'mafia.views.mafia_power_form', name='mafia_power_form'),
+                       url(r'^mafia-powers/$', 'mafia.views.mafia_powers', name='mafia_powers'),
                        url(r'^admin/', include(admin.site.urls)),
 ) + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

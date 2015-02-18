@@ -10,7 +10,7 @@
     },
     {
         "fields": {
-            "evil_by_default": true,
+            "evil_by_default": false,
             "name": "Rogue",
             "description": "The rogue wants the mafia to win. Unfortunately, they don\u2019t know who the mafia are. The rogue may attempt to kill any player by tapping them on the shoulder and saying \u201cBANG\u201d. If the kill succeeds, or if the rogue was disarmed, then they can\u2019t make another kill until three days later. The rogue may not try to kill the same person twice on the same day.\r\n\r\nAdditionally, the rogue can destroy evidence as if they were a member of the mafia"
         },

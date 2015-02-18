@@ -1,4 +1,5 @@
 import random
+from django import forms
 from django.core.urlresolvers import reverse
 
 from django.db import models
@@ -112,7 +113,7 @@ class Player(models.Model):
     # - Innocent child
     # - Mafia
     # - Investigator
-    #  - Vigilante
+    # - Vigilante
 
     # TODO conspiracy theorist list
     SUPERHERO_IDENTITY = 1
@@ -127,7 +128,7 @@ class Player(models.Model):
     role_information = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
-        return self.user.username + " (" + self.game.name + ")"
+        return self.username
 
     def is_alive(self):
         if len(Death.objects.filter(murderee=self)):
@@ -217,14 +218,14 @@ class Player(models.Model):
                         kind == None or kind == Investigation.SUPERHERO):
             # TODO implement secret identity / superhero identity
             # return not Investigation.exists(day=self.game.current_day-1,
-            #   investigator=self,investigation_type=Investigation.SH)
+            # investigator=self,investigation_type=Investigation.SH)
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.SUPERHERO).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='Gay knight') and (
                         kind == None or kind == Investigation.GAY_KNIGHT):
-            #TODO check rules about gay knights - I think it's not actually one investigation per day
+            # TODO check rules about gay knights - I think it's not actually one investigation per day
             if not len(Investigation.objects.filter(investigator=self,
                                                     day=self.game.current_day,
                                                     investigation_type=Investigation.GAY_KNIGHT)) >= GAY_KNIGHT_INVESTIGATIONS:
@@ -491,11 +492,46 @@ class MafiaPower(models.Model):
     power = models.IntegerField(choices=MAFIA_POWER_TYPE)
 
     # No meaning except for:
-    # - Frame a townsperson: the id of the death for which they're framed
-    #  - Plant evidence: the id of the role for which evidence is being planted: negative indicates conscripted
+    # - Frame a townsperson: the id of the player whose death they are framed for
+    # - Plant evidence: the id of the role for which evidence is being planted: negative indicates conscripted
     other_info = models.IntegerField(null=True)
 
     # hitman name for Hire a Hitman
     comment = models.CharField(max_length=50)
 
     game = models.ForeignKey(Game)
+
+    def get_power_name(self):
+        for a, b in MafiaPower.MAFIA_POWER_TYPE:
+            if a == self.power:
+                return b
+
+        return "???"
+
+    def can_use_via_form(self):
+        return self.power != MafiaPower.KABOOM and self.power != MafiaPower.SCHEME
+
+    def needs_extra_field(self):
+        if self.power == MafiaPower.FRAME_A_TOWNSPERSON:
+            return forms.ModelChoiceField(queryset=Player.objects.filter(game__active=True),
+                                          label="Whose death do you want to frame on the target?")
+        elif self.power == MafiaPower.HIRE_A_HITMAN:
+            return forms.CharField(max_length=40, label="Whom are you hiring as a hitman?")
+        elif self.power == MafiaPower.PLANT_EVIDENCE:
+            choices = []
+            for role in Role.objects.all():
+                if role.name != "Mafia":
+                    choices.append((-role.id, "Conscripted %s" % role.name))
+                choices.append((role.id, "%s" % role.name))
+
+            return forms.ChoiceField(choices=choices, label="What role would you like to plant evidence for?")
+        elif self.power == MafiaPower.SET_A_TRAP:
+            return forms.ModelChoiceField(queryset=Role.objects.all(), label="What is your guess for a role?")
+        else:
+            return False
+
+    def get_row(self):
+        return "<tr>" \
+               "<td>Link to use this power</td>" + \
+               ("<td>%s</td>" % self.get_power_name()) + \
+               "</tr>"

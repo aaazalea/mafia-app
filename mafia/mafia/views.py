@@ -14,7 +14,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
-from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm
+from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm
 from django.shortcuts import render
 from models import Player, Death, Game, Investigation, LynchVote, Item
 from django.core.urlresolvers import reverse
@@ -331,3 +331,31 @@ def player_intros(request):
             return HttpResponse("You must be playing in this game.")
         else:
             return render(request, 'introductions.html', {'user': request.user, 'game': game})
+
+
+@login_required
+def mafia_power_form(request):
+    form = MafiaPowerForm(request, request.POST or None)
+    if form.is_valid():
+        message = form.submit()
+        messages.add_message(request, messages.SUCCESS, message)
+        return HttpResponseRedirect(reverse('mafia_powers'))
+    else:
+        player = Player.objects.get(user=request.user, game__active=True)
+        if player.is_evil:
+            return render(request, "mafia_power_form.html", {'form': form, 'player': player})
+        else:
+            messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
+
+
+@login_required
+def mafia_powers(request):
+    game = Game.objects.get(active=True)
+    if request.user == game.god:
+        return render(request, "mafia_powers.html", {'user': request.user, 'game': game})
+    player = Player.objects.get(user=request.user, game__active=True)
+    if player.is_evil:
+        return render(request, "mafia_powers.html", {'player': player, 'game': game})
+    else:
+        messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
+
