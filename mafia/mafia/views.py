@@ -16,8 +16,9 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote, Item
+from models import Player, Death, Game, Investigation, LynchVote, Item, MafiaPower
 from django.core.urlresolvers import reverse
+
 
 def index(request):
     params = {}
@@ -91,8 +92,15 @@ def kill_report(request):
             killer = Player.objects.get(user=request.user, game__active=True)
             when = datetime.now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
-            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
-                                 day=Game.objects.get(active=True).current_day, where=where)
+            try:
+                Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
+                                     day=Game.objects.get(active=True).current_day, where=where)
+            except IndexError:
+                messages.error(request,
+                               "This kill is illegal (perhaps mafia have killed already" \
+                               " today or you're using a nonexistent kaboom?)")
+                return render(request, 'kill_report.html', {'form': form, 'player': killer})
+
             return HttpResponseRedirect("/")
 
     else:
@@ -317,6 +325,7 @@ def advance_day(request):
     game = Game.objects.get(active=True)
     if request.user == game.god:
         game.increment_day()
+        messages.info(request, "Day advanced successfully")
     return HttpResponseRedirect("/")
 
 
@@ -346,7 +355,7 @@ def mafia_power_form(request):
             return render(request, "mafia_power_form.html", {'form': form, 'player': player})
         else:
             messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
-
+            return HttpResponseRedirect("/")
 
 @login_required
 def mafia_powers(request):
@@ -358,4 +367,36 @@ def mafia_powers(request):
         return render(request, "mafia_powers.html", {'player': player, 'game': game})
     else:
         messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
+        return HttpResponseRedirect("/")
 
+
+@login_required
+def end_game(request):
+    # TODO make game over mean things
+    game = Game.objects.get(active=True)
+    if request.user == game.god:
+        game.archived = True
+        game.save()
+        messages.info(request, "Game ended successfully")
+    return HttpResponseRedirect("/")
+
+
+@login_required
+def evict_player(request, pid):
+    game = Game.objects.get(active=True)
+    if request.user == game.god:
+        player = Player.objects.get(id=pid)
+        Death.objects.create(murderee=player, day=player.game.current_day, when=datetime.now(),
+                             where="Evicted (day %d)" % player.game.current_day)
+        messages.success(request, "%s removed from game" % player.username)
+    return HttpResponseRedirect(reverse(player_intros))
+
+
+@login_required
+def resurrect_player(request, pid):
+    game = Game.objects.get(active=True)
+    if request.user == game.god:
+        player = Player.objects.get(id=pid)
+        Death.objects.get(murderee=player).delete()
+        messages.success(request, "%s resurrected" % player.username)
+    return HttpResponseRedirect(reverse(player_intros))

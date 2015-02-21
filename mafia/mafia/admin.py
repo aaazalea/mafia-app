@@ -5,6 +5,16 @@ from django.contrib import admin
 
 
 admin.site.register(Player)
+admin.site.register(Investigation)
+admin.site.register(Item)
+
+
+class MafiaPowerAdmin(admin.ModelAdmin):
+    list_display = ('power', 'target', 'state', 'extra')
+    exclude = ('target', 'day_used', 'other_info', 'comment')
+
+
+admin.site.register(MafiaPower, MafiaPowerAdmin)
 
 
 class RoleAdmin(admin.ModelAdmin):
@@ -26,6 +36,11 @@ class PlayerInline(admin.TabularInline):
     model = Player
     extra = 0
 
+
+class MafiaPowerInline(admin.TabularInline):
+    fields = ('power',)
+    model = MafiaPower
+    extra = 0
 
 class GameAdmin(admin.ModelAdmin):
     def advance_day(self, request, queryset):
@@ -60,7 +75,7 @@ class GameAdmin(admin.ModelAdmin):
 
     list_display = ('name', 'active', 'number_of_players', 'number_of_living_players')
     exclude = ('active', 'archived', 'current_day')
-    inlines = (PlayerInline,)
+    inlines = (PlayerInline, MafiaPowerInline)
     actions = [advance_day, archive_games, pair_gay_knights]
 
 

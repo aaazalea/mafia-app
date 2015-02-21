@@ -5,7 +5,7 @@ from models import *
 
 class PlayerModelChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
-        return obj.user.username
+        return obj.username
 
 
 class DeathReportForm(forms.Form):
@@ -80,28 +80,36 @@ class MafiaPowerForm(forms.Form):
             self.fields['power_id'] = forms.IntegerField(widget=forms.HiddenInput(), initial=power.id)
 
     def submit(self):
-        power = MafiaPower.objects.get(id=self.data['power_id'])
-        if power.power == MafiaPower.POISON:
-            person_poisoned = Player.objects.get(id=self.data['target'])
-            pass
-        if power.power == MafiaPower.SET_A_TRAP:
-            person_trapped = Player.objects.get(id=self.data['target'])
-            role_guess = Role.objects.get(id=self.data['extra_field'])
-            pass
-        if power.power == MafiaPower.SLAUGHTER_THE_WEAK:
-            person_slaughtered = Player.objects.get(id=self.data['target'])
-            pass
-        if power.power == MafiaPower.FRAME_A_TOWNSPERSON:
-            person_framed = Player.objects.get(id=self.data['target'])
-            person_killed = Player.objects.get(id=self.data['extra_field'])
-            pass
-        if power.power == MafiaPower.PLANT_EVIDENCE:
-            pass
-        if power.power == MafiaPower.MANIPULATE_THE_PRESS:
-            pass
-        if power.power == MafiaPower.HIRE_A_HITMAN:
-            pass
-        if power.power == MafiaPower.CONSCRIPTION:
-            pass
+        charge = MafiaPower.objects.get(id=self.data['power_id'])
 
-        return "Power executed successfully: %s" % power.get_power_name()
+        response = "Power executed successfully: %s" % charge.get_power_name()
+
+        charge.target = Player.objects.get(id=self.data['target'])
+        charge.state = MafiaPower.USED
+        charge.day_used = charge.target.game.current_day
+
+        if charge.power == MafiaPower.SET_A_TRAP:
+            role_guess = Role.objects.get(id=self.data['extra_field'])
+            if charge.target.role == role_guess:
+                charge.state = MafiaPower.SET
+                response = "Trap set successfully on %s" % charge.target
+            else:
+                charge.comment = "Incorrect, %s is not a %s." % (charge.target, role_guess)
+                response = "Incorrect guess - trap failed."
+        elif charge.power == MafiaPower.SLAUGHTER_THE_WEAK:
+            if charge.target.role == Role.objects.get(name__iexact="Innocent Child"):
+                charge.state = MafiaPower.SET
+                response = "Charge set successfully on %s" % charge.target
+            else:
+                charge.comment = "Incorrect, %s is not an innocent child." % charge.target
+                response = "Incorrect guess - slaughter failed."
+        elif charge.power == MafiaPower.FRAME_A_TOWNSPERSON or charge.power == MafiaPower.PLANT_EVIDENCE:
+            charge.other_info = self.data['extra_field']
+        elif charge.power == MafiaPower.HIRE_A_HITMAN:
+            charge.comment = "Hitman hired: %s" % self.data['extra_field']
+        elif charge.power == MafiaPower.CONSCRIPTION:
+            charge.target.conscripted = True
+            charge.target.save()
+
+        charge.save()
+        return response

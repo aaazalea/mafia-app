@@ -6,11 +6,20 @@
 
     <table class="table">
         <tr>
-            <th>Header 1</th>
+            <th>Power</th>
             <th>Header 2</th>
         </tr>
         {% for p in game.mafiapower_set.all %}
-            {{ p.get_row|safe }}
+            <tr class="{{ p.get_class }}">
+                <td>
+                    {% if p.can_use_via_form %}
+                        <a href="{% url 'mafia_power_form' %}?power_id={{ p.id }}">{{ p.get_power_name }}</a>
+                    {% else %}
+                        {{ p.get_power_name }}
+                    {% endif %}
+                </td>
+                <td>Extra information</td>
+            </tr>
         {% endfor %}
     </table>
 {% endblock %}

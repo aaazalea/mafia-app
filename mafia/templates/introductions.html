@@ -10,16 +10,20 @@
             <th>Introduction</th>
             <th>Picture</th>
             {% if game.god == user %}
-                <th>Role</th>{% endif %}
+                <th colspan="2">Role</th>{% endif %}
 
         </tr>
         {% for p in game.player_set.all %}
             <tr{% if not p.is_alive %} class="danger"{% endif %}>
                 <td>{{ p.username }}{% if not p.is_alive %} (dead){% endif %}</td>
-                <td>{{ p.introduction }}</td>
+                <td width="50%">{{ p.introduction }}</td>
                 <td>p.picture</td>
                 {% if game.god == user %}
-                    <td>{{ p.role.name }}</td>{% endif %}
+                    <td>{{ p.role.name }}{% if p.conscripted %} (conscripted){% endif %}</td>
+                    <td>{% if p.alive %}<a href="{% url 'evict_player' p.id %}" class="btn btn-default">Evict</a>
+                        {% else %}<a href="{% url 'resurrect_player' p.id %}" class="btn btn-default">Resurrect</a>
+                    {% endif %}</td>
+                {% endif %}
             </tr>
         {% endfor %}
     </table>

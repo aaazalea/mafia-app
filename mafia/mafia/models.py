@@ -268,6 +268,7 @@ class Player(models.Model):
         elif self.role == Role.objects.get(name__iexact='gay knight'):
             if not self.gn_partner.is_alive():
                 investigations = Investigation.objects.filter(investigator=self)
+                # TODO check if they've investigated correctly
 
     def lynch_votes_for(self, day):
         votes = []
@@ -289,7 +290,6 @@ class Player(models.Model):
         return LynchVote.objects.filter(voter=self).exists()
 
     def dies_tonight(self):
-        # TODO implement poison
 
         if self.role == Role.objects.get(name__iexact="Desperado"):
             if self.role_information == DESPERADO_DAYS:
@@ -300,6 +300,12 @@ class Player(models.Model):
                 return "Lovesickness (day %d)" % self.game.current_day
         # elif self.role == Role.objects.get(name__iexact="Prophet")
 
+        poisons = MafiaPower.objects.filter(power=MafiaPower.POISON, target=self)
+        if poisons.exists():
+            poison = poisons[0]
+            if poison.day_used == self.game.current_day - 2:
+                return "Poisoned on day %d" % poison.day_used
+
         return False
 
     def increment_day(self):
@@ -307,6 +313,14 @@ class Player(models.Model):
         if self.role == Role.objects.get(name__iexact="Desperado"):
             if self.role_information >= Player.DESPERADO_ACTIVATING:
                 self.role_information += 1
+
+        poisons = MafiaPower.objects.filter(power=MafiaPower.POISON, target=self)
+        if poisons.exists():
+            poison = poisons[0]
+            if poison.day_used == self.game.current_day:
+                # TODO message the user that they've been poisoned
+                # TODO decide on notification method
+                pass
 
         self.save()
 
@@ -317,7 +331,7 @@ class Player(models.Model):
     username = property(get_username)
 
     def get_links(self):
-        links = [(reverse('death_report'), "I died.")]
+        links = [(reverse('death_report'), "Report your death.")]
         if self.can_make_kills():
             links.append((reverse('kill_report'), "Report a kill you made"))
         if self.can_investigate():
@@ -335,10 +349,39 @@ class Death(models.Model):
     kaboom = models.BooleanField(default=False)
     murderee = models.OneToOneField(Player)
     where = models.CharField(max_length=100)
-
-    # Manipulate The Press
-    mtp = models.BooleanField(default=False)
+    free = models.BooleanField(default=False)
     day = models.IntegerField()
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            # (if not in database)
+            if self.murderer and self.murderer.is_evil:
+                traps = MafiaPower.objects.filter(target=self.murderee, state=MafiaPower.SET)
+                if traps.exists():
+                    self.free = True
+                    for trap in traps:
+                        trap.state = MafiaPower.AVAILABLE
+                        trap.target = None
+                        trap.save()
+            else:
+                self.free = True
+            if self.kaboom and self.murderer.is_evil and not self.murderer.elected_roles.filter(
+                    name__iexact="Police officer").exists():
+                kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE)
+                kaboom = kabooms[0]
+                kaboom.target = self.murderee
+                kaboom.day_used = self.murderee.game.current_day
+                kaboom.state = MafiaPower.USED
+                kaboom.save()
+            if (not self.free) and Death.objects.filter(day=self.day, free=False,
+                                                        murderee__game=self.murderee.game).exists():
+                schemes = MafiaPower.objects.filter(power=MafiaPower.SCHEME, state=MafiaPower.AVAILABLE)
+                scheme = schemes[0]
+                scheme.target = self.murderee
+                scheme.day_used = self.murderee.game.current_day
+                scheme.state = MafiaPower.USED
+                scheme.save()
+        super(Death, self).save(*args, **kwargs)
 
     def __str__(self):
         if self.murderer:
@@ -351,9 +394,20 @@ class Death(models.Model):
     def is_investigable(self, investigation_type):
         if investigation_type == Investigation.GAY_KNIGHT:
             return True
-        elif self.mtp:
+        elif MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
             return False
         return True
+
+    def get_shovel_text(self):
+        evidence = MafiaPower.objects.filter(power=MafiaPower.PLANT_EVIDENCE, target=self.murderee)
+        if evidence.exists():
+            return "%s%s" % (
+                "Conscripted " if evidence[0].other_info < 0 else "",
+                Role.objects.get(id=abs(evidence[0].other_info)).name)
+        if self.murderee.conscripted:
+            return "Conscripted %s" % self.murderee.role.name
+        else:
+            return self.murderee.role.name
 
 
 class GayKnightPair(models.Model):
@@ -388,10 +442,17 @@ class Investigation(models.Model):
     investigation_type = models.CharField(max_length=2, choices=INVESTIGATION_KINDS, default=INVESTIGATOR)
     guess = models.ForeignKey(Player, related_name='investigated')
 
+    result = models.IntegerField(default=-1)
+
     def is_correct(self):
-        # TODO Manipulate the press
-        # TODO Investigative powers
-        return self.death.murderer == self.guess and self.death.is_investigable(self.investigation_type)
+        if self.result == -1:
+            self.result = (self.death.murderer == self.guess and self.death.is_investigable(self.investigation_type))
+
+            if self.investigation_type != Investigation.GAY_KNIGHT:
+                if MafiaPower.objects.filter(target=self.guess, other_info=self.death.murderee.id,
+                                             game=self.death.murderee.game).exists():
+                    self.result = True
+        return self.result
 
     correct = property(is_correct)
 
@@ -458,11 +519,6 @@ class Item(models.Model):
         return "????? (Item)"
 
 
-class ForumUsername(models.Model):
-    username = models.CharField(max_length=100)
-    user = models.OneToOneField(User)
-
-
 class MafiaPower(models.Model):
     KABOOM = 1
     SCHEME = 2
@@ -492,6 +548,7 @@ class MafiaPower(models.Model):
     power = models.IntegerField(choices=MAFIA_POWER_TYPE)
 
     # No meaning except for:
+    # - Poison: set to 1 once the user sees that they've been poisoned.
     # - Frame a townsperson: the id of the player whose death they are framed for
     # - Plant evidence: the id of the role for which evidence is being planted: negative indicates conscripted
     other_info = models.IntegerField(null=True)
@@ -501,6 +558,17 @@ class MafiaPower(models.Model):
 
     game = models.ForeignKey(Game)
 
+    AVAILABLE = 0
+    SET = 1
+    USED = 2
+    STATES = [
+        (AVAILABLE, "Available"),
+        (SET, "Set"),
+        (USED, "Used")
+    ]
+
+    state = models.IntegerField(choices=STATES, default=AVAILABLE)
+
     def get_power_name(self):
         for a, b in MafiaPower.MAFIA_POWER_TYPE:
             if a == self.power:
@@ -509,7 +577,7 @@ class MafiaPower(models.Model):
         return "???"
 
     def can_use_via_form(self):
-        return self.power != MafiaPower.KABOOM and self.power != MafiaPower.SCHEME
+        return self.power != MafiaPower.KABOOM and self.power != MafiaPower.SCHEME and self.state == MafiaPower.AVAILABLE
 
     def needs_extra_field(self):
         if self.power == MafiaPower.FRAME_A_TOWNSPERSON:
@@ -530,8 +598,26 @@ class MafiaPower(models.Model):
         else:
             return False
 
-    def get_row(self):
-        return "<tr>" \
-               "<td>Link to use this power</td>" + \
-               ("<td>%s</td>" % self.get_power_name()) + \
-               "</tr>"
+    def get_class(self):
+        if self.state == MafiaPower.USED:
+            return "danger"
+        elif self.state == MafiaPower.AVAILABLE:
+            return ""
+
+    def __str__(self):
+        return self.get_power_name()
+
+    def extra(self):
+        """
+
+        :return: interpretation of other_info field
+        """
+        if self.state == MafiaPower.AVAILABLE:
+            return ""
+        if self.power == MafiaPower.FRAME_A_TOWNSPERSON:
+            return "Framed for %s's death" % Player.objects.get(id=self.other_info)
+        elif self.power == MafiaPower.PLANT_EVIDENCE:
+            return "Evidence planted for %s%s" % (
+                ("Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
+        else:
+            return ""

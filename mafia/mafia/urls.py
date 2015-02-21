@@ -2,6 +2,7 @@ from django.conf.urls import patterns, include, url
 from django.conf.urls.static import static
 from django.conf import settings
 from django.contrib import admin
+from mafia.settings import PRODUCTION
 
 urlpatterns = patterns('',
                        # Examples:
@@ -22,5 +23,8 @@ urlpatterns = patterns('',
                        url(r'^advance-day/$', 'mafia.views.advance_day', name='advance_day'),
                        url(r'^mafia-power-form/$', 'mafia.views.mafia_power_form', name='mafia_power_form'),
                        url(r'^mafia-powers/$', 'mafia.views.mafia_powers', name='mafia_powers'),
+                       url(r'^end-game/$', 'mafia.views.end_game', name='end_game'),
+                       url(r'^evict-player/(?P<pid>\d+)', 'mafia.views.evict_player', name='evict_player'),
+                       url(r'^resurrect-player/(?P<pid>\d+)', 'mafia.views.resurrect_player', name='resurrect_player'),
                        url(r'^admin/', include(admin.site.urls)),
-) + static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+) + (() if PRODUCTION else static(settings.STATIC_URL, document_root=settings.STATIC_ROOT))
