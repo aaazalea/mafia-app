@@ -1,7 +1,9 @@
+from math import ceil
 from django import forms
+from django.core.exceptions import ValidationError
 
 from models import *
-
+from settings import *
 
 class PlayerModelChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
@@ -113,3 +115,18 @@ class MafiaPowerForm(forms.Form):
 
         charge.save()
         return response
+
+
+class ConspiracyListForm(forms.Form):
+    new_conspiracy_list = forms.ModelMultipleChoiceField(queryset=Player.objects.filter(game__active=True))
+
+    def clean_new_conspiracy_list(self):
+        conspiracy_size = len(self.cleaned_data['new_conspiracy_list'])
+        if CONSPIRACY_LIST_SIZE_IS_PERCENT:
+            if conspiracy_size > ceil(Game.objects.get(
+                    active=True).number_of_living_players * 1.0 / CONSPIRACY_LIST_SIZE):
+                raise ValidationError("You may only have %d%% of game on your conspiracy list." % CONSPIRACY_LIST_SIZE)
+        else:
+            if conspiracy_size > CONSPIRACY_LIST_SIZE:
+                raise ValidationError("You may only have %d people on your conspiracy list." % CONSPIRACY_LIST_SIZE)
+        return self.cleaned_data['new_conspiracy_list']

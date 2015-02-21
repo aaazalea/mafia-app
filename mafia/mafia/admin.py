@@ -4,22 +4,12 @@ from models import *
 from django.contrib import admin
 
 
-admin.site.register(Player)
 admin.site.register(Investigation)
 admin.site.register(Item)
 
 
-class MafiaPowerAdmin(admin.ModelAdmin):
-    list_display = ('power', 'target', 'state', 'extra')
-    exclude = ('target', 'day_used', 'other_info', 'comment')
-
-
-admin.site.register(MafiaPower, MafiaPowerAdmin)
-
-
 class RoleAdmin(admin.ModelAdmin):
     list_display = ('name', 'description')
-
 
 admin.site.register(Role, RoleAdmin)
 

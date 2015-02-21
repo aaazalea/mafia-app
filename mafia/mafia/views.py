@@ -14,9 +14,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
-from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm
+from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, ConspiracyListForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote, Item, MafiaPower
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList
 from django.core.urlresolvers import reverse
 
 
@@ -76,7 +76,8 @@ def death_report(request):
             return HttpResponse("You don't have a role in any currently active game.")
         if me.is_alive():
             form = DeathReportForm()
-            return render(request, 'death_report.html', {'form': form, 'player': me})
+            return render(request, 'form.html', {'form': form, 'player': me, 'title': 'Report your own death',
+                                                 'url': reverse('death_report')})
         else:
             messages.add_message(request, messages.ERROR, "You're dead already")
             return HttpResponseRedirect("/")
@@ -99,7 +100,8 @@ def kill_report(request):
                 messages.error(request,
                                "This kill is illegal (perhaps mafia have killed already" \
                                " today or you're using a nonexistent kaboom?)")
-                return render(request, 'kill_report.html', {'form': form, 'player': killer})
+                return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('kill_report'),
+                                                     title: 'Report a Kill You Made'})
 
             return HttpResponseRedirect("/")
 
@@ -108,7 +110,8 @@ def kill_report(request):
         if player.is_alive():
             form = KillReportForm()
 
-            return render(request, 'kill_report.html', {'form': form, 'player': player})
+            return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('kill_report'),
+                                                 title: 'Report a Kill You Made'})
         else:
             messages.add_message(request, messages.ERROR, "You're dead already")
             return HttpResponseRedirect("/")
@@ -176,7 +179,8 @@ def investigation_form(request):
     if Player.objects.get(user=request.user, game__active=True).is_alive():
         form = InvestigationForm()
 
-        return render(request, 'investigation_form.html', {'form': form})
+        return render(request, 'form.html', {'form': form, 'player': player, 'title': "Make an Investigation",
+                                             'url': reverse('investigation_form')})
     else:
         messages.add_message(request, messages.ERROR, "Dead people can't make investigations.")
 
@@ -239,7 +243,8 @@ def lynch_vote(request):
         else:
             form = LynchVoteForm()
 
-            return render(request, 'lynch_vote.html', {'form': form, 'player': player})
+            return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Vote to Lynch Someone',
+                                                 'url': reverse('lynch_vote')})
     else:
         messages.add_message(request, messages.ERROR, "Dead people don't vote. :(")
         return HttpResponseRedirect("/")
@@ -352,10 +357,12 @@ def mafia_power_form(request):
     else:
         player = Player.objects.get(user=request.user, game__active=True)
         if player.is_evil:
-            return render(request, "mafia_power_form.html", {'form': form, 'player': player})
+            return render(request, "form.html", {'form': form, 'player': player, "title": "Use a Mafia Power",
+                                                 'url': reverse('mafia_power_form')})
         else:
             messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
             return HttpResponseRedirect("/")
+
 
 @login_required
 def mafia_powers(request):
@@ -400,3 +407,23 @@ def resurrect_player(request, pid):
         Death.objects.get(murderee=player).delete()
         messages.success(request, "%s resurrected" % player.username)
     return HttpResponseRedirect(reverse(player_intros))
+
+
+@login_required
+def conspiracy_list_form(request):
+    form = ConspiracyListForm(request.POST or None)
+    if form.is_valid():
+        player = Player.objects.get(game__active=True, user=request.user)
+        if player.role != Role.objects.get(name__iexact="Conspiracy theorist"):
+            messages.warning(request, "You're not a conspiracy theorist!")
+            return HttpResponseRedirect("/")
+        conspiracy = ConspiracyList.objects.get_or_create(owner=player, day=player.game.current_day + 1)[0]
+        conspiracy.conspired.clear()
+        for conspiree in form.data['new_conspiracy_list']:
+            conspiracy.conspired.add(conspiree)
+        messages.success(request, "Conspiracy list updated successfully")
+        return HttpResponseRedirect(reverse('your_role'))
+    else:
+        player = Player.objects.get(user=request.user, game__active=True)
+        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
+                                             'url': reverse('conspiracy_list_form')})

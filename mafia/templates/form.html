@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Form{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 {% load bootstrap3 %}
 
 {% block main %}
-    <form action="{% block url %}{% url 'death_report' %}{% endblock %}" method="post">
+    <form action="{% block url %}{{ url }}{% endblock %}" method="post">
         {% csrf_token %}
         {% bootstrap_form form %}
 

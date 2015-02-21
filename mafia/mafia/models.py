@@ -1,10 +1,10 @@
 import random
+
 from django import forms
 from django.core.urlresolvers import reverse
-
 from django.db import models
 from django.contrib.auth.models import User
-from mafia.settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS
+from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS
 from django.utils.datetime_safe import datetime
 
 
@@ -115,7 +115,6 @@ class Player(models.Model):
     # - Investigator
     # - Vigilante
 
-    # TODO conspiracy theorist list
     SUPERHERO_IDENTITY = 1
     SECRET_IDENTITY = 0
     DESPERADO_INACTIVE = -1
@@ -192,6 +191,20 @@ class Player(models.Model):
         elif self.role == Role.objects.get(name__iexact="mafia"):
             return "Your fellow mafia are: <ul>%s</ul>" % "".join(
                 "<li>%s</li>" % m.username for m in Player.objects.filter(game=self.game, role=self.role) if m != self)
+        elif self.role == Role.objects.get(name__iexact='Conspiracy theorist'):
+            today = self.conspiracylist_set.get_or_create(day=self.game.current_day)[0]
+            tomorrow = self.conspiracylist_set.filter(day=self.game.current_day + 1)
+            if tomorrow.exists():
+                tomorrow = tomorrow[0]
+            else:
+                tomorrow = today
+            tablify = lambda consp: ''.join(
+                '<td>%s</td>' % d.username for d in
+                consp.conspired.all()) if consp.conspired.exists() else "<td>(empty)</td>"
+            return '<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
+                   '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
+                       tablify(today), tablify(tomorrow))
+
         else:
             return ""
 
@@ -340,6 +353,8 @@ class Player(models.Model):
             links.append((
                 "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
                     'go_desperado'), "Go desperado"))
+        if self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
+            links.append((reverse('conspiracy_list_form'), 'Update your conspiracy list'))
         return links
 
 
@@ -621,3 +636,9 @@ class MafiaPower(models.Model):
                 ("Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
         else:
             return ""
+
+
+class ConspiracyList(models.Model):
+    owner = models.ForeignKey(Player)
+    conspired = models.ManyToManyField(Player, related_name='conspiracies')
+    day = models.IntegerField()
