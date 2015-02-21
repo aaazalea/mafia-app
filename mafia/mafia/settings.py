@@ -11,7 +11,8 @@ https://docs.djangoproject.com/en/1.7/ref/settings/
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
 
-PRODUCTION = False
+
+PRODUCTION = ('MAFIA_DJANGO_PRODUCTION' in os.environ)
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 TEMPLATE_DIRS = [os.path.join(BASE_DIR, 'templates')]
@@ -21,14 +22,17 @@ TEMPLATE_DIRS = [os.path.join(BASE_DIR, 'templates')]
 # See https://docs.djangoproject.com/en/1.7/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = '$#2l!+mf(wyu=@vl=@771g!9%4vhg!mqd+^bs2i(^#v&8toe*('
+if not PRODUCTION:
+    SECRET_KEY = '$#2l!+mf(wyu=@vl=@771g!9%4vhg!mqd+^bs2i(^#v&8toe*('
+else:
+    SECRET_KEY = os.environ['MAFIA_SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not PRODUCTION
 
-TEMPLATE_DEBUG = True
+TEMPLATE_DEBUG = DEBUG
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['mafia-testing.mit.edu']
 
 
 # Application definition
