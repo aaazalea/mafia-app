@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.models import AnonymousUser, User
 from django.template.response import TemplateResponse
 from django.utils.http import is_safe_url
 from django.shortcuts import resolve_url
@@ -14,7 +14,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
-from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, ConspiracyListForm
+from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, ConspiracyListForm, \
+    SignUpForm
 from django.shortcuts import render
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList
 from django.core.urlresolvers import reverse
@@ -97,11 +98,12 @@ def kill_report(request):
                 Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
                                      day=Game.objects.get(active=True).current_day, where=where)
             except IndexError:
+                player = Player.objects.get(user=request.user, game__active=True)
                 messages.error(request,
                                "This kill is illegal (perhaps mafia have killed already" \
                                " today or you're using a nonexistent kaboom?)")
                 return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('kill_report'),
-                                                     title: 'Report a Kill You Made'})
+                                                     'title': 'Report a Kill You Made'})
 
             return HttpResponseRedirect("/")
 
@@ -111,7 +113,7 @@ def kill_report(request):
             form = KillReportForm()
 
             return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('kill_report'),
-                                                 title: 'Report a Kill You Made'})
+                                                 'title': 'Report a Kill You Made'})
         else:
             messages.add_message(request, messages.ERROR, "You're dead already")
             return HttpResponseRedirect("/")
@@ -268,8 +270,35 @@ def item(request, id, password):
         return HttpResponse("Using items is not yet implemented.")
 
 
+@sensitive_post_parameters()
+@csrf_protect
+@never_cache
 def sign_up(request):
-    pass
+    form = SignUpForm(request.POST or None)
+    if form.is_valid():
+        username = form.data['username']
+        password = form.data['password']
+        confirm_password = form.data['confirm_password']
+        email = form.data['email']
+        game = Game.objects.get(id=form.data['game'])
+        if password != confirm_password:
+            messages.error(request, "Password must match confirmation")
+            return render('sign_up.html', {'form': form})
+
+        if password == '':
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                messages.error(request, "You don't have an account; please set a password.")
+                return render('sign_up.html', {'form': form})
+        else:
+            user = User.objects.create(username=username)
+            user.set_password(password)
+        Player.objects.create(user=user, game=game)
+
+        return HttpResponse("you signed up.")
+
+    return render(request, 'sign_up.html', {'form': form})
 
 
 @login_required

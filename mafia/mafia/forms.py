@@ -1,9 +1,9 @@
 from math import ceil
-from django import forms
-from django.core.exceptions import ValidationError
 
+from django.core.exceptions import ValidationError
 from models import *
 from settings import *
+
 
 class PlayerModelChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
@@ -60,9 +60,15 @@ class LynchVoteForm(forms.Form):
 
 class SignUpForm(forms.Form):
     username = forms.CharField(max_length=30, label="Username (The same as on mafia.mit.edu, except for spaces)")
-    password = forms.CharField(max_length=200, label="Password: ", widget=forms.PasswordInput())
-    confirm_password = forms.CharField(max_length=200, label="Confirm password: ", widget=forms.PasswordInput())
-    email = forms.EmailField(max_length=50, label="Email Address:")
+    password = forms.CharField(max_length=200, label="Password (if you don't already have an account on this site): ",
+                               widget=forms.PasswordInput(),
+                               required=False)
+    confirm_password = forms.CharField(max_length=200,
+                                       label="Confirm password (if you don't already have an account on this site): ",
+                                       widget=forms.PasswordInput(),
+                                       required=False)
+    email = forms.EmailField(max_length=50, label="Email Address (if you don't already have an account):",
+                             required=False)
     game = forms.ModelChoiceField(
         queryset=Game.objects.filter(archived=False),
         label="Choose a game to join:"
