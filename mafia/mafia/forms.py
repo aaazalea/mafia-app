@@ -59,20 +59,20 @@ class LynchVoteForm(forms.Form):
 
 
 class SignUpForm(forms.Form):
-    username = forms.CharField(max_length=30, label="Username (The same as on mafia.mit.edu, except for spaces)")
-    password = forms.CharField(max_length=200, label="Password (if you don't already have an account on this site): ",
+    username = forms.CharField(max_length=30, label="Username")
+    password = forms.CharField(max_length=200, label="Password: ",
                                widget=forms.PasswordInput(),
                                required=False)
     confirm_password = forms.CharField(max_length=200,
-                                       label="Confirm password (if you don't already have an account on this site): ",
+                                       label="Confirm password: ",
                                        widget=forms.PasswordInput(),
                                        required=False)
-    email = forms.EmailField(max_length=50, label="Email Address (if you don't already have an account):",
+    email = forms.EmailField(max_length=50, label="Email Address:",
                              required=False)
-    game = forms.ModelChoiceField(
-        queryset=Game.objects.filter(archived=False, active=False),
-        label="Choose a game to join:"
-    )
+    introduction = forms.CharField(label="Introduction:", )
+    picture = forms.CharField(label="Picture URL")
+
+
 
 
 class MafiaPowerForm(forms.Form):

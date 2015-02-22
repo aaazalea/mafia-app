@@ -108,6 +108,7 @@ class Player(models.Model):
     elected_roles = models.ManyToManyField(ElectedRole, blank=True)
     conscripted = models.BooleanField(default=False)
     introduction = models.TextField()
+    photo = models.TextField()
 
     # Nothing:
     # - Innocent child

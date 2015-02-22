@@ -274,31 +274,37 @@ def item(request, id, password):
 @csrf_protect
 @never_cache
 def sign_up(request):
+    try:
+        game = Game.objects.get(active=False, archived=False)
+    except Game.DoesNotExist:
+        game = None
     form = SignUpForm(request.POST or None)
     if form.is_valid():
         username = form.data['username']
         password = form.data['password']
         confirm_password = form.data['confirm_password']
         email = form.data['email']
-        game = Game.objects.get(id=form.data['game'])
+        picture = form.data['picture']
+        intro = form.data['introduction']
         if password != confirm_password:
             messages.error(request, "Password must match confirmation")
-            return render('sign_up.html', {'form': form})
+            return render('sign_up.html', {'form': form, 'game': game})
 
         if password == '':
             try:
                 user = User.objects.get(username=username)
             except User.DoesNotExist:
                 messages.error(request, "You don't have an account; please set a password.")
-                return render('sign_up.html', {'form': form})
+                return render('sign_up.html', {'form': form, 'game': game})
         else:
             user = User.objects.create(username=username)
             user.set_password(password)
-        Player.objects.create(user=user, game=game)
+            user.email = email
+        Player.objects.create(user=user, game=game, introduction=intro, photo=picture)
 
-        return HttpResponse("you signed up.")
+        return HttpResponse("You signed up for mafia game \"%s\" successfully" % game.name)
 
-    return render(request, 'sign_up.html', {'form': form})
+    return render(request, 'sign_up.html', {'form': form, 'game': game})
 
 
 @login_required
