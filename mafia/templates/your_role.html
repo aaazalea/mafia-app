@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 
 {% load mafia_extras %}
-{% block title %}Your Role{% endblock %}
+{% block title %}Your Role: {{ player.role }}{% endblock %}
 
 
 
 
 {% block main %}
-    <h2>Your role is {{ player.role }}</h2>
     <p>
         {{ player.role.description }}
     </p>

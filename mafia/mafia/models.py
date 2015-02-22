@@ -189,8 +189,8 @@ class Player(models.Model):
                     (self.game.current_day - self.role_information),
                     (self.game.current_day + DESPERADO_DAYS - self.role_information))
         elif self.role == Role.objects.get(name__iexact="mafia"):
-            return "Your fellow mafia are: <ul>%s</ul>" % "".join(
-                "<li>%s</li>" % m.username for m in Player.objects.filter(game=self.game, role=self.role) if m != self)
+            return "The mafia are: <ul>%s</ul>" % "".join(
+                "<li>%s</li>" % m.username for m in Player.objects.filter(game=self.game) if m.is_evil())
         elif self.role == Role.objects.get(name__iexact='Conspiracy theorist'):
             today = self.conspiracylist_set.get_or_create(day=self.game.current_day)[0]
             tomorrow = self.conspiracylist_set.filter(day=self.game.current_day + 1)
@@ -355,6 +355,8 @@ class Player(models.Model):
                     'go_desperado'), "Go desperado"))
         if self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
             links.append((reverse('conspiracy_list_form'), 'Update your conspiracy list'))
+        if self.is_evil():
+            links.append((reverse('mafia_powers'), 'Mafia Powers'))
         return links
 
 
@@ -370,15 +372,15 @@ class Death(models.Model):
     def save(self, *args, **kwargs):
         if not self.pk:
             # (if not in database)
-            if self.murderer and self.murderer.is_evil:
-                traps = MafiaPower.objects.filter(target=self.murderee, state=MafiaPower.SET)
-                if traps.exists():
-                    self.free = True
-                    for trap in traps:
-                        trap.state = MafiaPower.AVAILABLE
-                        trap.target = None
-                        trap.save()
-            else:
+            traps = MafiaPower.objects.filter(target=self.murderee, state=MafiaPower.SET)
+            if traps.exists():
+                self.free = True
+                for trap in traps:
+                    trap.state = MafiaPower.AVAILABLE
+                    trap.target = None
+                    trap.save()
+            if not (self.murderer and self.murderer.is_evil):
+                #TODO does not take into account conscripted innocents making kills with innocent powers
                 self.free = True
             if self.kaboom and self.murderer.is_evil and not self.murderer.elected_roles.filter(
                     name__iexact="Police officer").exists():

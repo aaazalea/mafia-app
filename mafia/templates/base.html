@@ -21,14 +21,14 @@
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
                 </button>
-                <a class="navbar-brand" href="/">Mafia</a>
+                <a class="navbar-brand" href="/">Home</a>
             </div>
 
             <!-- Collect the nav links, forms, and other content for toggling -->
             <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
                 <ul class="nav navbar-nav">
                     <li><a href="http://mafia.mit.edu">Forums </a></li>
-                    <li><a href="{% url "player_intros" %}">Player Intros</a></li>
+                    <li><a href="{% url "player_intros" %}">Players</a></li>
                     {% if player %}
                         <li><a href="{{ player.game.rules_url }}">Rules</a></li>
                         <li class="dropdown">
@@ -57,21 +57,13 @@
                                    aria-expanded="false">God Powers
                                     <span class="caret"></span></a>
                                 <ul class="dropdown-menu" role="menu">
-                                    <li><a href="{% url 'advance_day' %}">Advance day</a></li>
+                                    <li><a href="{% url 'mafia_powers' %}">Mafia Powers</a></li>
+                                    <li><a href="{% url 'advance_day' %}">Advance Day</a></li>
                                     <li><a href="{% url 'end_game' %}">End Game</a></li>
+
                                 </ul>
                             </li>
                         {% endif %}
-                    {% endif %}
-                    {% if game.god == user or player.is_evil %}
-                        <li class="dropdown">
-                            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
-                               aria-expanded="false">Evil Things
-                                <span class="caret"></span></a>
-                            <ul class="dropdown-menu" role="menu">
-                                <li><a href="{% url 'mafia_powers' %}">Mafia Powers</a></li>
-                            </ul>
-                        </li>
                     {% endif %}
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
@@ -84,7 +76,7 @@
                                aria-expanded="false">Logged
                                 in as <b>{{ player.username }}</b> <span class="caret"></span></a>
                             <ul class="dropdown-menu" role="menu">
-                                <li><a href="{% url "your_role" %}"> Your role: <b>{{ player.role.name }}</b></a></li>
+                                <li><a href="{% url "your_role" %}"> Your role information</a></li>
                                 <li><a href="{% url "logout" %}">Log out</a></li>
                             </ul>
                         </li>
