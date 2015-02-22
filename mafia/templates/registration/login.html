@@ -9,7 +9,7 @@
                 Your username and password didn't match; please try again.
             </div>{% endif %}
 
-        <form method="post" action="{% url 'mafia.views.login' %}" class="form-signin">
+        <form method="post" action="{% url 'accounts:login' %}" class="form-signin">
             {% csrf_token %}
             <h2 class="form-signin-heading">Mafia sign-in</h2>
 

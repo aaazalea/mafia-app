@@ -85,7 +85,7 @@
                                 in as <b>{{ player.username }}</b> <span class="caret"></span></a>
                             <ul class="dropdown-menu" role="menu">
                                 <li><a href="{% url "your_role" %}"> Your role: <b>{{ player.role.name }}</b></a></li>
-                                <li><a href="{% url "logout" %}">Log out</a></li>
+                                <li><a href="{% url "accounts:logout" %}">Log out</a></li>
                             </ul>
                         </li>
                     {% elif user.username %}
@@ -98,7 +98,7 @@
                             <ul class="dropdown-menu" role="menu">
                                 <li><a href="{% url "your_role" %}"> Your role: {% if user == game.god %}<b>God</b>
                                     {% else %}<b>Guest</b>{% endif %}</a></li>
-                                <li><a href="{% url "logout" %}">Log out</a></li>
+                                <li><a href="{% url "accounts:logout" %}">Log out</a></li>
                             </ul>
                         </li>
                     {% else %}

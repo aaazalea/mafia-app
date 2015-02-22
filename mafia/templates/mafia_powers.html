@@ -13,7 +13,7 @@
             <tr class="{{ p.get_class }}">
                 <td>
                     {% if p.can_use_via_form %}
-                        <a href="{% url 'mafia_power_form' %}?power_id={{ p.id }}">{{ p.get_power_name }}</a>
+                        <a href="{% url 'forms:mafia_power' %}?power_id={{ p.id }}">{{ p.get_power_name }}</a>
                     {% else %}
                         {{ p.get_power_name }}
                     {% endif %}

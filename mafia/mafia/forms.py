@@ -70,7 +70,7 @@ class SignUpForm(forms.Form):
     email = forms.EmailField(max_length=50, label="Email Address (if you don't already have an account):",
                              required=False)
     game = forms.ModelChoiceField(
-        queryset=Game.objects.filter(archived=False),
+        queryset=Game.objects.filter(archived=False, active=False),
         label="Choose a game to join:"
     )
 
