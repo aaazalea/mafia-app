@@ -54,7 +54,7 @@
                     Today, you voted to lynch <b>{{ vote.lynchee.username }}</b> (<a href="{% url "vote" %}">change</a>
                     ).
                 {% else %}
-                    <a href="{% url 'vote' %}">Click here to vote for a person to lynch.</a>
+                    <a href="{% url 'forms:vote' %}">Click here to vote for a person to lynch.</a>
                 {% endif %}
                 {% endif %}</td>
                 <td>{% if day != player.game.current_day %}<a href="{% url 'daily_lynch' day %}">

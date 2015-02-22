@@ -23,6 +23,6 @@ urlpatterns = patterns('',
                        url(r'^advance-day/$', 'mafia.views.advance_day', name='advance_day'),
 
                        url(r'^admin/', include(admin.site.urls)),
-                       url(r'^form/', include(form_urls)),
-                       url(r'^accounts/', include(accounts_urls)),
+                       url(r'^form/', include(form_urls, namespace='forms')),
+                       url(r'^accounts/', include(accounts_urls, namespace='accounts')),
 ) + (() if PRODUCTION else static(settings.STATIC_URL, document_root=settings.STATIC_ROOT))

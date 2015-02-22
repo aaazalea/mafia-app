@@ -78,7 +78,7 @@ def death_report(request):
         if me.is_alive():
             form = DeathReportForm()
             return render(request, 'form.html', {'form': form, 'player': me, 'title': 'Report your own death',
-                                                 'url': reverse('death_report')})
+                                                 'url': reverse('forms:death')})
         else:
             messages.add_message(request, messages.ERROR, "You're dead already")
             return HttpResponseRedirect("/")
@@ -102,7 +102,7 @@ def kill_report(request):
                 messages.error(request,
                                "This kill is illegal (perhaps mafia have killed already" \
                                " today or you're using a nonexistent kaboom?)")
-                return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('kill_report'),
+                return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
                                                      'title': 'Report a Kill You Made'})
 
             return HttpResponseRedirect("/")
@@ -112,7 +112,7 @@ def kill_report(request):
         if player.is_alive():
             form = KillReportForm()
 
-            return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('kill_report'),
+            return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
                                                  'title': 'Report a Kill You Made'})
         else:
             messages.add_message(request, messages.ERROR, "You're dead already")
@@ -182,7 +182,7 @@ def investigation_form(request):
         form = InvestigationForm()
 
         return render(request, 'form.html', {'form': form, 'player': player, 'title': "Make an Investigation",
-                                             'url': reverse('investigation_form')})
+                                             'url': reverse('forms:investigation')})
     else:
         messages.add_message(request, messages.ERROR, "Dead people can't make investigations.")
 
@@ -246,7 +246,7 @@ def lynch_vote(request):
             form = LynchVoteForm()
 
             return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Vote to Lynch Someone',
-                                                 'url': reverse('lynch_vote')})
+                                                 'url': reverse('forms:vote')})
     else:
         messages.add_message(request, messages.ERROR, "Dead people don't vote. :(")
         return HttpResponseRedirect("/")
@@ -387,7 +387,7 @@ def mafia_power_form(request):
         player = Player.objects.get(user=request.user, game__active=True)
         if player.is_evil:
             return render(request, "form.html", {'form': form, 'player': player, "title": "Use a Mafia Power",
-                                                 'url': reverse('mafia_power_form')})
+                                                 'url': reverse('forms:mafia_power')})
         else:
             messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
             return HttpResponseRedirect("/")
@@ -425,7 +425,7 @@ def evict_player(request, pid):
         Death.objects.create(murderee=player, day=player.game.current_day, when=datetime.now(),
                              where="Evicted (day %d)" % player.game.current_day)
         messages.success(request, "%s removed from game" % player.username)
-    return HttpResponseRedirect(reverse(player_intros))
+    return HttpResponseRedirect(reverse('player_intros'))
 
 
 @login_required
@@ -435,7 +435,7 @@ def resurrect_player(request, pid):
         player = Player.objects.get(id=pid)
         Death.objects.get(murderee=player).delete()
         messages.success(request, "%s resurrected" % player.username)
-    return HttpResponseRedirect(reverse(player_intros))
+    return HttpResponseRedirect(reverse('player_intros'))
 
 
 @login_required
@@ -455,4 +455,4 @@ def conspiracy_list_form(request):
     else:
         player = Player.objects.get(user=request.user, game__active=True)
         return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
-                                             'url': reverse('conspiracy_list_form')})
+                                             'url': reverse('forms:conspiracy_list')})

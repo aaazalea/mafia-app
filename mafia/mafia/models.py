@@ -126,6 +126,10 @@ class Player(models.Model):
     # TODO implement Vampire (not doing this yet because very likely to change -jakob)
     role_information = models.IntegerField(null=True, blank=True)
 
+    class Meta:
+        unique_together = (('game', 'user'),)
+
+
     def __str__(self):
         return self.username
 
@@ -274,14 +278,15 @@ class Player(models.Model):
             for kill in self.kills.all():
                 if not kill.murderee.is_evil():
                     return False
-                    # TODO implement game days
-                    # if kill.get_day() == Game.get_day():
-                    # return False
+                elif kill.day == self.game.current_day:
+                    # can't kill again today
+                    return False
             return True
         elif self.role == Role.objects.get(name__iexact='gay knight'):
             if not self.gn_partner.is_alive():
-                investigations = Investigation.objects.filter(investigator=self)
-                # TODO check if they've investigated correctly
+                if Investigation.objects.filter(investigator=self, target=self.gn_partner.death.murderer).exists():
+                    return True
+        return False
 
     def lynch_votes_for(self, day):
         votes = []
@@ -344,17 +349,17 @@ class Player(models.Model):
     username = property(get_username)
 
     def get_links(self):
-        links = [(reverse('death_report'), "Report your death.")]
+        links = [(reverse('forms:death'), "Report your death.")]
         if self.can_make_kills():
-            links.append((reverse('kill_report'), "Report a kill you made"))
+            links.append((reverse('forms:kill'), "Report a kill you made"))
         if self.can_investigate():
-            links.append((reverse('investigation_form'), "Make an investigation"))
+            links.append((reverse('forms:investigation'), "Make an investigation"))
         if self.role == Role.objects.get(name="Desperado") and self.role_information == Player.DESPERADO_INACTIVE:
             links.append((
                 "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
                     'go_desperado'), "Go desperado"))
         if self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
-            links.append((reverse('conspiracy_list_form'), 'Update your conspiracy list'))
+            links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
         return links
