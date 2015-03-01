@@ -86,25 +86,29 @@ class MafiaPowerForm(forms.Form):
             if need:
                 self.fields['extra_field'] = need
             self.fields['power_id'] = forms.IntegerField(widget=forms.HiddenInput(), initial=power.id)
-
-    def submit(self):
+            if power.power == MafiaPower.SET_A_TRAP or power.power == MafiaPower.SLAUGHTER_THE_WEAK:
+                self.fields['target'] = forms.ModelChoiceField(queryset=Player.objects.filter(death=None, game=self.game))
+    def submit(self, user):
         charge = MafiaPower.objects.get(id=self.data['power_id'])
 
         response = "Power executed successfully: %s" % charge.get_power_name()
-
         charge.target = Player.objects.get(id=self.data['target'])
         charge.state = MafiaPower.USED
         charge.day_used = charge.target.game.current_day
+        charge.user = user
 
         if charge.power == MafiaPower.SET_A_TRAP:
             role_guess = Role.objects.get(id=self.data['extra_field'])
+            charge.user = None
             if charge.target.role == role_guess:
                 charge.state = MafiaPower.SET
                 response = "Trap set successfully on %s" % charge.target
             else:
                 charge.comment = "Incorrect, %s is not a %s." % (charge.target, role_guess)
                 response = "Incorrect guess - trap failed."
+
         elif charge.power == MafiaPower.SLAUGHTER_THE_WEAK:
+            charge.user = None
             if charge.target.role == Role.objects.get(name__iexact="Innocent Child"):
                 charge.state = MafiaPower.SET
                 response = "Charge set successfully on %s" % charge.target
@@ -120,6 +124,9 @@ class MafiaPowerForm(forms.Form):
             charge.target.save()
 
         charge.save()
+
+        charge.target.game.log(message=charge.get_log_message(), mafia_can_see=True)
+
         return response
 
 

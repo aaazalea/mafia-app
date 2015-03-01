@@ -17,7 +17,7 @@ from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, ConspiracyListForm, \
     SignUpForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower
 from django.core.urlresolvers import reverse
 
 
@@ -166,6 +166,9 @@ def investigation_form(request):
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
                                                              investigation_type=form.data['investigation_type'],
                                                              day=game.current_day)
+                game.log(message="%s investigates %s for the death of %s (answer: %s)" %
+                                 (player, guess, death.murderee, "Correct" if investigation.is_correct() else "Wrong"),
+                         users_who_can_see=[player])
                 if investigation.is_correct():
                     messages.add_message(request, messages.SUCCESS, "Correct. <b>%s</b> killed <b>%s</b>."
                                          % (guess.user.username, death.murderee.user.username))
@@ -238,9 +241,14 @@ def lynch_vote(request):
                 vote_value = Player.objects.get(id=form.data["vote"])
                 vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=datetime.now(),
                                                 day=game.current_day)
+                vote_message = "%s voted to lynch %s" % (player, vote_value)
                 if player.elected_roles.filter(name="Mayor").exists():
                     vote.value = 3
                     vote.save()
+                    vote_message += " (3x vote)"
+
+                game.log(message=vote_message, users_who_can_see=[player])
+
                 return HttpResponseRedirect("/")
         else:
             form = LynchVoteForm()
@@ -385,15 +393,17 @@ def player_intros(request):
 @login_required
 def mafia_power_form(request):
     form = MafiaPowerForm(request, request.POST or None)
+    player = Player.objects.get(user=request.user, game__active=True)
     if form.is_valid():
-        message = form.submit()
+        message = form.submit(player)
         messages.add_message(request, messages.SUCCESS, message)
         return HttpResponseRedirect(reverse('mafia_powers'))
     else:
-        player = Player.objects.get(user=request.user, game__active=True)
         if player.is_evil:
-            return render(request, "form.html", {'form': form, 'player': player, "title": "Use a Mafia Power",
-                                                 'url': reverse('forms:mafia_power')})
+            power = MafiaPower.objects.get(id=request.GET['power_id'])
+            return render(request, "form.html",
+                          {'form': form, 'player': player, "title": "Use a Mafia Power: %s" % power,
+                           'url': reverse('forms:mafia_power')})
         else:
             messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
             return HttpResponseRedirect("/")
@@ -462,3 +472,15 @@ def conspiracy_list_form(request):
         player = Player.objects.get(user=request.user, game__active=True)
         return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
                                              'url': reverse('forms:conspiracy_list')})
+
+
+def logs(request):
+    game = Game.objects.get(active=True)
+    game_logs = [(log_item.get_text(request.user), log_item.time,log_item.is_day_start()) for log_item in game.logitem_set.all() if
+                 log_item.visible_to(request.user)]
+    game_logs.sort(key=lambda a: a[1])
+    try:
+        player = Player.objects.get(game=game, user=request.user)
+    except Player.DoesNotExist:
+        player = None
+    return render(request, "logs.html", {'player': player, 'user': request.user, 'logs': game_logs, 'game': game})

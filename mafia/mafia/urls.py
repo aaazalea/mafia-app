@@ -16,6 +16,7 @@ urlpatterns = patterns('',
                        url(r'^go-desperado/$', 'mafia.views.go_desperado', name='go_desperado'),
                        url(r'^player-intros/$', 'mafia.views.player_intros', name='player_intros'),
                        url(r'^mafia-powers/$', 'mafia.views.mafia_powers', name='mafia_powers'),
+                       url(r'^logs/$', 'mafia.views.logs', name='logs'),
 
                        url(r'^end-game/$', 'mafia.views.end_game', name='end_game'),
                        url(r'^evict-player/(?P<pid>\d+)', 'mafia.views.evict_player', name='evict_player'),

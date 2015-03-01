@@ -16,6 +16,18 @@ class Game(models.Model):
     current_day = models.IntegerField(default=0)
     rules_url = models.URLField()
 
+    def log(self, message=None, anonymous_message=None, mafia_can_see=False, users_who_can_see=[]):
+        if not message:
+            message = anonymous_message
+        if anonymous_message:
+            item = LogItem.objects.create(game=self, text=message, anonymous_text=anonymous_message, mafia_can_view=mafia_can_see)
+        else:
+            item = LogItem.objects.create(text=message, mafia_can_view=mafia_can_see, game=self)
+        item.game = self
+        for user in users_who_can_see:
+            item.users_can_view.add(user)
+        item.save()
+
     def __str__(self):
         return self.name
 
@@ -38,6 +50,7 @@ class Game(models.Model):
                 lynches, choices = self.get_lynch(self.current_day)
                 for lynched in lynches:
                     self.kill_day_end(lynched, "Lynch (day %d)" % self.current_day)
+                    self.log(anonymous_message="%s was lynched (end day %d)" % (lynched, self.current_day))
 
             # note that end-of-day deaths happen *after* lynches
             for player in self.living_players:
@@ -49,15 +62,19 @@ class Game(models.Model):
 
         self.current_day += 1
         self.save()
+        LogItem.objects.create(anonymous_text="Day %d start" % self.current_day, text="Day %d start" % self.current_day, game=self, day_start=self)
+
 
     def kill_day_end(self, player, why):
         Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
+        self.log(anonymous_message="%s dies of %s (end day %d)" % (player, why, self.current_day))
 
         # redistribute items
-        # TODO announce/notify the redistribution
         for item in player.item_set.all():
             recipient = random.choice(self.living_players.all())
             item.owner = recipient
+            self.log(anonymous_message="%s redistributed from %s to %s (end day %d)" %
+                                       (item.get_name(), player, recipient, self.current_day))
             item.save()
 
     def has_user(self, user):
@@ -386,16 +403,22 @@ class Death(models.Model):
                     trap.target = None
                     trap.save()
             if not (self.murderer and self.murderer.is_evil):
-                #TODO does not take into account conscripted innocents making kills with innocent powers
+                # TODO does not take into account conscripted innocents making kills with innocent powers
                 self.free = True
-            if self.kaboom and self.murderer.is_evil and not self.murderer.elected_roles.filter(
+            kaboom = None
+            if self.kaboom and not self.murderer.elected_roles.filter(
                     name__iexact="Police officer").exists():
-                kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE)
+                if not self.murderer.is_evil():
+                    raise Exception("Non-mafia attempt to use a kaboom without being police officer")
+                kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE,
+                                                    game__active=True)
                 kaboom = kabooms[0]
                 kaboom.target = self.murderee
                 kaboom.day_used = self.murderee.game.current_day
                 kaboom.state = MafiaPower.USED
+                kaboom.user = self.murderer
                 kaboom.save()
+            scheme = None
             if (not self.free) and Death.objects.filter(day=self.day, free=False,
                                                         murderee__game=self.murderee.game).exists():
                 schemes = MafiaPower.objects.filter(power=MafiaPower.SCHEME, state=MafiaPower.AVAILABLE)
@@ -403,7 +426,24 @@ class Death(models.Model):
                 scheme.target = self.murderee
                 scheme.day_used = self.murderee.game.current_day
                 scheme.state = MafiaPower.USED
+                scheme.user = self.murderer
                 scheme.save()
+            if self.murderer:
+
+                if kaboom and scheme:
+                    extra_message = " (KABOOM!, Scheme)"
+                elif kaboom:
+                    extra_message = " (KABOOM!)"
+                elif scheme:
+                    extra_message = " (Scheme used)"
+                else:
+                    extra_message = ""
+                message = "%s killed %s%s" % (self.murderer, self.murderee, extra_message)
+                anon_message = "%s was killed at %s" % (self.murderee, self.where)
+                self.murderee.game.log(message=message, anonymous_message=anon_message,
+                                       mafia_can_see=self.murderer.is_evil(),
+                                       users_who_can_see=[self.murderer, self.murderee])
+
         super(Death, self).save(*args, **kwargs)
 
     def __str__(self):
@@ -566,10 +606,10 @@ class MafiaPower(models.Model):
         (CONSCRIPTION, "Conscription")
     ]
 
-    target = models.ForeignKey(Player, null=True)
+    target = models.ForeignKey(Player, null=True, related_name="mafiapowers_targeted_set")
     day_used = models.IntegerField(null=True)
     power = models.IntegerField(choices=MAFIA_POWER_TYPE)
-
+    user = models.ForeignKey(Player, null=True, related_name="mafiapowers_used_set")
     # No meaning except for:
     # - Poison: set to 1 once the user sees that they've been poisoned.
     # - Frame a townsperson: the id of the player whose death they are framed for
@@ -650,3 +690,30 @@ class ConspiracyList(models.Model):
     owner = models.ForeignKey(Player)
     conspired = models.ManyToManyField(Player, related_name='conspiracies')
     day = models.IntegerField()
+
+
+class LogItem(models.Model):
+    game = models.ForeignKey(Game)
+    text = models.CharField(blank=False, null=False, max_length=200)
+    anonymous_text = models.CharField(null=True, max_length=200)
+    mafia_can_view = models.BooleanField(default=False)
+    users_can_view = models.ManyToManyField(Player, blank=True)
+    time = models.DateTimeField(auto_now_add=True)
+    day_start = models.BooleanField(default=False)
+
+    def visible_to(self, user):
+        if user == self.game.god:
+            return True
+        elif self.mafia_can_view and Player.objects.filter(game=self.game, user=user, role__name="Mafia").exists():
+            return True
+        else:
+            return self.users_can_view.filter(user=user).exists()
+
+    def get_text(self, user):
+        if self.visible_to(user):
+            return self.text
+        else:
+            return self.anonymous_text
+
+    def is_day_start(self):
+        return self.day_start

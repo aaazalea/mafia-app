@@ -73,7 +73,7 @@ if PRODUCTION:
             'ENGINE': 'django.db.backends.mysql',
             'NAME': 'jakobw+mafia-app',
             'USER': 'jakobw',
-            'PASSWORD': 'vec67dav',
+            'PASSWORD': os.environ['MAFIA_DB_PASS'],
             'HOST': 'sql.mit.edu',  # Or an IP Address that your DB is hosted on
             'PORT': '3306',
         }

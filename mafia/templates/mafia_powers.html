@@ -7,7 +7,10 @@
     <table class="table">
         <tr>
             <th>Power</th>
-            <th>Header 2</th>
+            <th>User</th>
+            <th>Target</th>
+            <th>Day Used</th>
+            <th>Other</th>
         </tr>
         {% for p in game.mafiapower_set.all %}
             <tr class="{{ p.get_class }}">
@@ -18,7 +21,10 @@
                         {{ p.get_power_name }}
                     {% endif %}
                 </td>
-                <td>Extra information</td>
+                <td>{{ p.user.username }}</td>
+                <td>{{ p.target.username }}</td>
+                <td>{% if p.day_used != None %}{{ p.day_used }}{% endif %}</td>
+                <td>{{ p.extra }}</td>
             </tr>
         {% endfor %}
     </table>

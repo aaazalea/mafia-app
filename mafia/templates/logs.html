@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Logs{% endblock %}
+
+
+{% block main %}
+
+    <table class="table">
+        <tr>
+            <th>Log</th>
+            <th>Time</th>
+        </tr>
+        {% for log in logs %}
+            {% if log.2 %}
+                <tr>
+                    <th>{{ log.0 }}</th>
+                    <th>{{ log.1 }}</th>
+                </tr>
+
+            {% else %}
+                <tr>
+                    <td>{{ log.0 }}</td>
+                    <td>{{ log.1 }}</td>
+                </tr>
+            {% endif %}
+        {% endfor %}
+    </table>
+{% endblock %}
