@@ -88,6 +88,7 @@ class MafiaPowerForm(forms.Form):
             self.fields['power_id'] = forms.IntegerField(widget=forms.HiddenInput(), initial=power.id)
             if power.power == MafiaPower.SET_A_TRAP or power.power == MafiaPower.SLAUGHTER_THE_WEAK:
                 self.fields['target'] = forms.ModelChoiceField(queryset=Player.objects.filter(death=None, game=self.game))
+
     def submit(self, user):
         charge = MafiaPower.objects.get(id=self.data['power_id'])
 

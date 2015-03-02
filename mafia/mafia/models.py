@@ -20,7 +20,8 @@ class Game(models.Model):
         if not message:
             message = anonymous_message
         if anonymous_message:
-            item = LogItem.objects.create(game=self, text=message, anonymous_text=anonymous_message, mafia_can_view=mafia_can_see)
+            item = LogItem.objects.create(game=self, text=message, anonymous_text=anonymous_message,
+                                          mafia_can_view=mafia_can_see)
         else:
             item = LogItem.objects.create(text=message, mafia_can_view=mafia_can_see, game=self)
         item.game = self
@@ -62,7 +63,8 @@ class Game(models.Model):
 
         self.current_day += 1
         self.save()
-        LogItem.objects.create(anonymous_text="Day %d start" % self.current_day, text="Day %d start" % self.current_day, game=self, day_start=self)
+        LogItem.objects.create(anonymous_text="Day %d start" % self.current_day, text="Day %d start" % self.current_day,
+                               game=self, day_start=self)
 
 
     def kill_day_end(self, player, why):
@@ -684,6 +686,36 @@ class MafiaPower(models.Model):
                 ("Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
         else:
             return ""
+
+    def get_log_message(self):
+        if self.power == MafiaPower.KABOOM:
+            return "%s used a kaboom to kill %s." % (self.user, self.target.death.murderee)
+        elif self.power == MafiaPower.SCHEME:
+            return "%s used a scheme to kill %s." % (self.user, self.target)
+        elif self.power == MafiaPower.POISON:
+            return "The mafia poisoned %s." % self.target
+        elif self.power == MafiaPower.SET_A_TRAP:
+            if self.state == MafiaPower.SET:
+                return "The mafia have successfully set a trap on %s." % self.target
+            else:
+                return "The mafia have failed to set a trap on %s." % self.target
+        elif self.power == MafiaPower.SLAUGHTER_THE_WEAK:
+            if self.state == MafiaPower.SET:
+                return "The mafia have successfully slaughter the weak on %s." % self.target
+            else:
+                return "The mafia have failed to slaughter the weak on %s." % self.target
+        elif self.power == MafiaPower.FRAME_A_TOWNSPERSON:
+            return "The mafia frame %s for the death of %s." % (self.target, Player.objects.get(id=self.other_info))
+        elif self.power == MafiaPower.FRAME_A_TOWNSPERSON:
+            return "Mafia have planted evidence on %s as %s%s" % (
+                (self.target, "Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
+        elif self.power == MafiaPower.MANIPULATE_THE_PRESS:
+            return "The mafia are manipulating the press on the death of %s." % self.target
+        elif self.power == MafiaPower.HIRE_A_HITMAN:
+            return "The mafia have hired %s as a hitman to kill %s." % (self.comment, self.target)
+        elif self.power == MafiaPower.CONSCRIPTION:
+            return "%s made %s an offer they couldn't refuse. %s has been conscripted into the mafia." % (
+                self.user, self.target, self.target)
 
 
 class ConspiracyList(models.Model):

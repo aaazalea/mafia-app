@@ -32,7 +32,7 @@ DEBUG = not PRODUCTION
 
 TEMPLATE_DEBUG = DEBUG
 
-ALLOWED_HOSTS = ['mafia-testing.mit.edu']
+ALLOWED_HOSTS = ['mafia-testing.mit.edu', 'mafia-app.mit.edu', 'jakob.scripts.mit.edu', 'mafia.jakobw.scripts.mit.edu']
 
 
 # Application definition
