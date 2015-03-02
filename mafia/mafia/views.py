@@ -14,8 +14,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
-from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, ConspiracyListForm, \
-    SignUpForm
+from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
+    ConspiracyListForm, SignUpForm
 from django.shortcuts import render
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower
 from django.core.urlresolvers import reverse
@@ -100,7 +100,7 @@ def kill_report(request):
             except IndexError:
                 player = Player.objects.get(user=request.user, game__active=True)
                 messages.error(request,
-                               "This kill is illegal (perhaps mafia have killed already" \
+                               "This kill is illegal (perhaps mafia have killed already"
                                " today or you're using a nonexistent kaboom?)")
                 return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
                                                      'title': 'Report a Kill You Made'})
@@ -145,9 +145,6 @@ def your_role(request):
     except Player.DoesNotExist:
         messages.add_message(request, messages.ERROR, "You aren't playing, so you can't go to your role page.")
         return HttpResponseRedirect("/")
-
-    current_lynch_vote = player.lynch_vote_made(game.current_day)
-    recents = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
 
     return render(request, 'your_role.html',
                   {'player': player})
@@ -261,18 +258,18 @@ def lynch_vote(request):
 
 
 @login_required
-def item(request, id, password):
-    item = Item.objects.get(id=id)
-    if item.password != password:
+def item(request, item_id, password):
+    current_item = Item.objects.get(id=item_id)
+    if current_item.password != password:
         return HttpResponseNotFound
     else:
         player = Player.objects.get(user=request.user, game__active=True)
-        if player != item.owner:
-            old_owner = item.owner
-            item.owner = player
+        if player != current_item.owner:
+            old_owner = current_item.owner
+            current_item.owner = player
             messages.add_message(request, messages.SUCCESS,
                                  "You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (
-                                     item.name, old_owner.username))
+                                     current_item.name, old_owner.username))
 
         # using the item
         return HttpResponse("Using items is not yet implemented.")
@@ -464,8 +461,19 @@ def conspiracy_list_form(request):
             return HttpResponseRedirect("/")
         conspiracy = ConspiracyList.objects.get_or_create(owner=player, day=player.game.current_day + 1)[0]
         conspiracy.conspired.clear()
-        for conspiree in form.data['new_conspiracy_list']:
-            conspiracy.conspired.add(conspiree)
+        data = form.data['new_conspiracy_list']
+        if isinstance(data, unicode):
+            data = [data]
+        consp_list = []
+        for conspiree in data:
+            c = Player.objects.get(id=int(conspiree))
+            conspiracy.conspired.add(c)
+            consp_list.append(c.username)
+        conspiracy.save()
+        player.game.log(
+            message="%s has updated their conspiracy list for day %d to: [%s]" % (player, player.game.current_day + 1,
+                                                                                  ", ".join(consp_list)),
+            users_who_can_see=[player])
         messages.success(request, "Conspiracy list updated successfully")
         return HttpResponseRedirect(reverse('your_role'))
     else:
@@ -476,7 +484,8 @@ def conspiracy_list_form(request):
 
 def logs(request):
     game = Game.objects.get(active=True)
-    game_logs = [(log_item.get_text(request.user), log_item.time,log_item.is_day_start()) for log_item in game.logitem_set.all() if
+    game_logs = [(log_item.get_text(request.user), log_item.time, log_item.is_day_start()) for log_item in
+                 game.logitem_set.all() if
                  log_item.visible_to(request.user)]
     game_logs.sort(key=lambda a: a[1])
     try:
