@@ -95,7 +95,7 @@
                         </li>
                     {% else %}
                         <li class="navbar-text">Day <b>{{ game.current_day }}</b> of <b>{{ game.name }}</b></li>
-                        <li><a href="{% url 'mafia.views.login' %}">Log in</a></li>
+                        <li><a href="{% url 'accounts:login' %}">Log in</a></li>
 
                     {% endif %}
                 </ul>

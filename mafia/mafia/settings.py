@@ -28,7 +28,7 @@ else:
     SECRET_KEY = os.environ['MAFIA_SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = not PRODUCTION
+DEBUG = True or not PRODUCTION
 
 TEMPLATE_DEBUG = DEBUG
 

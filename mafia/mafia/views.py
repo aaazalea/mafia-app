@@ -300,7 +300,6 @@ def sign_up(request):
 
     return render(request, 'sign_up.html', {'form': form})
 
-
 @login_required
 def go_desperado(request):
     player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
