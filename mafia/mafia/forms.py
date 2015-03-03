@@ -122,8 +122,9 @@ class MafiaPowerForm(forms.Form):
             charge.comment = "Hitman hired: %s" % self.data['extra_field']
         elif charge.power == MafiaPower.CONSCRIPTION:
             charge.target.conscripted = True
+            charge.target.notify("You've been conscripted into the mafia. "
+                                 "Congratulations on your excellent life choices.", bad=False)
             charge.target.save()
-
         charge.save()
 
         charge.target.game.log(message=charge.get_log_message(), mafia_can_see=True)

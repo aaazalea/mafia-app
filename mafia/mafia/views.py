@@ -17,10 +17,26 @@ from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
     ConspiracyListForm, SignUpForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification
 from django.core.urlresolvers import reverse
 
 
+def notifier(function):
+    def new_func(request, *args, **kwargs):
+        unread = Notification.objects.filter(user=request.user, game__active=True, seen=False)
+        for message in unread:
+            if message.is_bad:
+                messages.error(request, message.content)
+            else:
+                messages.info(request, message.content)
+            message.seen = True
+            message.save()
+        return function(request, *args, **kwargs)
+
+    return new_func
+
+
+@notifier
 def index(request):
     params = {}
     if request.user.username == "admin":
@@ -53,6 +69,7 @@ def index(request):
                   params)
 
 
+@notifier
 @login_required
 def death_report(request):
     if request.method == "POST":
@@ -84,6 +101,7 @@ def death_report(request):
             return HttpResponseRedirect("/")
 
 
+@notifier
 @login_required
 def kill_report(request):
     if request.method == "POST":
@@ -119,6 +137,7 @@ def kill_report(request):
             return HttpResponseRedirect("/")
 
 
+@notifier
 def recent_deaths(request):
     game = Game.objects.get(active=True)
     is_god = request.user == game.god
@@ -134,6 +153,7 @@ def recent_deaths(request):
     return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents, 'player': player})
 
 
+@notifier
 @login_required
 def your_role(request):
     game = Game.objects.get(active=True)
@@ -150,6 +170,7 @@ def your_role(request):
                   {'player': player})
 
 
+@notifier
 @login_required
 def investigation_form(request):
     game = Game.objects.get(active=True)
@@ -189,6 +210,7 @@ def investigation_form(request):
     return HttpResponseRedirect("/")
 
 
+@notifier
 def daily_lynch(request, day):
     try:
         player = Player.objects.get(user=request.user, game__active=True)
@@ -223,6 +245,7 @@ def daily_lynch(request, day):
                                                 'player': player})
 
 
+@notifier
 @login_required
 def lynch_vote(request):
     player = Player.objects.get(user=request.user, game__active=True)
@@ -257,6 +280,7 @@ def lynch_vote(request):
         return HttpResponseRedirect("/")
 
 
+@notifier
 @login_required
 def item(request, item_id, password):
     current_item = Item.objects.get(id=item_id)
@@ -305,12 +329,15 @@ def sign_up(request):
             user = User.objects.create(username=username)
             user.set_password(password)
             user.email = email
+            user.save()
         Player.objects.create(user=user, game=game, introduction=intro, photo=picture)
 
         return HttpResponse("You signed up for mafia game \"%s\" successfully" % game.name)
 
     return render(request, 'sign_up.html', {'form': form, 'game': game})
 
+
+@notifier
 @login_required
 def go_desperado(request):
     player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
@@ -364,6 +391,7 @@ def login(request, template_name='registration/login.html',
                             current_app=current_app)
 
 
+@notifier
 @login_required
 def advance_day(request):
     game = Game.objects.get(active=True)
@@ -373,6 +401,7 @@ def advance_day(request):
     return HttpResponseRedirect("/")
 
 
+@notifier
 @login_required
 def player_intros(request):
     game = Game.objects.get(active=True)
@@ -386,6 +415,7 @@ def player_intros(request):
             return render(request, 'introductions.html', {'user': request.user, 'game': game})
 
 
+@notifier
 @login_required
 def mafia_power_form(request):
     form = MafiaPowerForm(request, request.POST or None)
@@ -405,6 +435,7 @@ def mafia_power_form(request):
             return HttpResponseRedirect("/")
 
 
+@notifier
 @login_required
 def mafia_powers(request):
     game = Game.objects.get(active=True)
@@ -418,6 +449,7 @@ def mafia_powers(request):
         return HttpResponseRedirect("/")
 
 
+@notifier
 @login_required
 def end_game(request):
     # TODO make game over mean things
@@ -450,6 +482,7 @@ def resurrect_player(request, pid):
     return HttpResponseRedirect(reverse('player_intros'))
 
 
+@notifier
 @login_required
 def conspiracy_list_form(request):
     form = ConspiracyListForm(request.POST or None)
@@ -481,6 +514,7 @@ def conspiracy_list_form(request):
                                              'url': reverse('forms:conspiracy_list')})
 
 
+@notifier
 def logs(request):
     game = Game.objects.get(active=True)
     game_logs = [(log_item.get_text(request.user), log_item.time, log_item.is_day_start()) for log_item in
