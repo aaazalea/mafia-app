@@ -23,14 +23,15 @@ from django.core.urlresolvers import reverse
 
 def notifier(function):
     def new_func(request, *args, **kwargs):
-        unread = Notification.objects.filter(user=request.user, game__active=True, seen=False)
-        for message in unread:
-            if message.is_bad:
-                messages.error(request, message.content)
-            else:
-                messages.info(request, message.content)
-            message.seen = True
-            message.save()
+        if not request.user.is_anonymous():
+            unread = Notification.objects.filter(user=request.user, game__active=True, seen=False)
+            for message in unread:
+                if message.is_bad:
+                    messages.error(request, message.content)
+                else:
+                    messages.info(request, message.content)
+                message.seen = True
+                message.save()
         return function(request, *args, **kwargs)
 
     return new_func
