@@ -32,7 +32,7 @@ DEBUG = True or not PRODUCTION
 
 TEMPLATE_DEBUG = DEBUG
 
-ALLOWED_HOSTS = ['mafia-testing.mit.edu']
+ALLOWED_HOSTS = ['mafia-testing.mit.edu', 'mafia-app.mit.edu', 'jakob.scripts.mit.edu', 'mafia.jakobw.scripts.mit.edu']
 
 
 # Application definition
@@ -73,7 +73,7 @@ if PRODUCTION:
             'ENGINE': 'django.db.backends.mysql',
             'NAME': 'jakobw+mafia-app',
             'USER': 'jakobw',
-            'PASSWORD': 'vec67dav',
+            'PASSWORD': os.environ['MAFIA_DB_PASS'],
             'HOST': 'sql.mit.edu',  # Or an IP Address that your DB is hosted on
             'PORT': '3306',
         }

@@ -14,10 +14,10 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
-from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, ConspiracyListForm, \
-    SignUpForm
+from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
+    ConspiracyListForm, SignUpForm
 from django.shortcuts import render
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower
 from django.core.urlresolvers import reverse
 
 
@@ -100,7 +100,7 @@ def kill_report(request):
             except IndexError:
                 player = Player.objects.get(user=request.user, game__active=True)
                 messages.error(request,
-                               "This kill is illegal (perhaps mafia have killed already" \
+                               "This kill is illegal (perhaps mafia have killed already"
                                " today or you're using a nonexistent kaboom?)")
                 return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
                                                      'title': 'Report a Kill You Made'})
@@ -146,9 +146,6 @@ def your_role(request):
         messages.add_message(request, messages.ERROR, "You aren't playing, so you can't go to your role page.")
         return HttpResponseRedirect("/")
 
-    current_lynch_vote = player.lynch_vote_made(game.current_day)
-    recents = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
-
     return render(request, 'your_role.html',
                   {'player': player})
 
@@ -166,6 +163,9 @@ def investigation_form(request):
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
                                                              investigation_type=form.data['investigation_type'],
                                                              day=game.current_day)
+                game.log(message="%s investigates %s for the death of %s (answer: %s)" %
+                                 (player, guess, death.murderee, "Correct" if investigation.is_correct() else "Wrong"),
+                         users_who_can_see=[player])
                 if investigation.is_correct():
                     messages.add_message(request, messages.SUCCESS, "Correct. <b>%s</b> killed <b>%s</b>."
                                          % (guess.user.username, death.murderee.user.username))
@@ -238,9 +238,14 @@ def lynch_vote(request):
                 vote_value = Player.objects.get(id=form.data["vote"])
                 vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=datetime.now(),
                                                 day=game.current_day)
+                vote_message = "%s voted to lynch %s" % (player, vote_value)
                 if player.elected_roles.filter(name="Mayor").exists():
                     vote.value = 3
                     vote.save()
+                    vote_message += " (3x vote)"
+
+                game.log(message=vote_message, users_who_can_see=[player])
+
                 return HttpResponseRedirect("/")
         else:
             form = LynchVoteForm()
@@ -253,18 +258,18 @@ def lynch_vote(request):
 
 
 @login_required
-def item(request, id, password):
-    item = Item.objects.get(id=id)
-    if item.password != password:
+def item(request, item_id, password):
+    current_item = Item.objects.get(id=item_id)
+    if current_item.password != password:
         return HttpResponseNotFound
     else:
         player = Player.objects.get(user=request.user, game__active=True)
-        if player != item.owner:
-            old_owner = item.owner
-            item.owner = player
+        if player != current_item.owner:
+            old_owner = current_item.owner
+            current_item.owner = player
             messages.add_message(request, messages.SUCCESS,
                                  "You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (
-                                     item.name, old_owner.username))
+                                     current_item.name, old_owner.username))
 
         # using the item
         return HttpResponse("Using items is not yet implemented.")
@@ -274,31 +279,37 @@ def item(request, id, password):
 @csrf_protect
 @never_cache
 def sign_up(request):
+    try:
+        game = Game.objects.get(active=False, archived=False)
+    except Game.DoesNotExist:
+        game = None
     form = SignUpForm(request.POST or None)
     if form.is_valid():
         username = form.data['username']
         password = form.data['password']
         confirm_password = form.data['confirm_password']
         email = form.data['email']
-        game = Game.objects.get(id=form.data['game'])
+        picture = form.data['picture']
+        intro = form.data['introduction']
         if password != confirm_password:
             messages.error(request, "Password must match confirmation")
-            return render('sign_up.html', {'form': form})
+            return render('sign_up.html', {'form': form, 'game': game})
 
         if password == '':
             try:
                 user = User.objects.get(username=username)
             except User.DoesNotExist:
                 messages.error(request, "You don't have an account; please set a password.")
-                return render('sign_up.html', {'form': form})
+                return render('sign_up.html', {'form': form, 'game': game})
         else:
             user = User.objects.create(username=username)
             user.set_password(password)
-        Player.objects.create(user=user, game=game)
+            user.email = email
+        Player.objects.create(user=user, game=game, introduction=intro, photo=picture)
 
-        return HttpResponse("you signed up.")
+        return HttpResponse("You signed up for mafia game \"%s\" successfully" % game.name)
 
-    return render(request, 'sign_up.html', {'form': form})
+    return render(request, 'sign_up.html', {'form': form, 'game': game})
 
 @login_required
 def go_desperado(request):
@@ -378,15 +389,17 @@ def player_intros(request):
 @login_required
 def mafia_power_form(request):
     form = MafiaPowerForm(request, request.POST or None)
+    player = Player.objects.get(user=request.user, game__active=True)
     if form.is_valid():
-        message = form.submit()
+        message = form.submit(player)
         messages.add_message(request, messages.SUCCESS, message)
         return HttpResponseRedirect(reverse('mafia_powers'))
     else:
-        player = Player.objects.get(user=request.user, game__active=True)
         if player.is_evil:
-            return render(request, "form.html", {'form': form, 'player': player, "title": "Use a Mafia Power",
-                                                 'url': reverse('forms:mafia_power')})
+            power = MafiaPower.objects.get(id=request.GET['power_id'])
+            return render(request, "form.html",
+                          {'form': form, 'player': player, "title": "Use a Mafia Power: %s" % power,
+                           'url': reverse('forms:mafia_power')})
         else:
             messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
             return HttpResponseRedirect("/")
@@ -447,11 +460,35 @@ def conspiracy_list_form(request):
             return HttpResponseRedirect("/")
         conspiracy = ConspiracyList.objects.get_or_create(owner=player, day=player.game.current_day + 1)[0]
         conspiracy.conspired.clear()
-        for conspiree in form.data['new_conspiracy_list']:
-            conspiracy.conspired.add(conspiree)
+        data = form.data['new_conspiracy_list']
+        if isinstance(data, unicode):
+            data = [data]
+        consp_list = []
+        for conspiree in data:
+            c = Player.objects.get(id=int(conspiree))
+            conspiracy.conspired.add(c)
+            consp_list.append(c.username)
+        conspiracy.save()
+        player.game.log(
+            message="%s has updated their conspiracy list for day %d to: [%s]" % (player, player.game.current_day + 1,
+                                                                                  ", ".join(consp_list)),
+            users_who_can_see=[player])
         messages.success(request, "Conspiracy list updated successfully")
         return HttpResponseRedirect(reverse('your_role'))
     else:
         player = Player.objects.get(user=request.user, game__active=True)
         return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
                                              'url': reverse('forms:conspiracy_list')})
+
+
+def logs(request):
+    game = Game.objects.get(active=True)
+    game_logs = [(log_item.get_text(request.user), log_item.time, log_item.is_day_start()) for log_item in
+                 game.logitem_set.all() if
+                 log_item.visible_to(request.user)]
+    game_logs.sort(key=lambda a: a[1])
+    try:
+        player = Player.objects.get(game=game, user=request.user)
+    except Player.DoesNotExist:
+        player = None
+    return render(request, "logs.html", {'player': player, 'user': request.user, 'logs': game_logs, 'game': game})
