@@ -23,7 +23,7 @@ from django.core.urlresolvers import reverse
 
 def notifier(function):
     def new_func(request, *args, **kwargs):
-        try:
+        if request.user.is_authenticated():
             unread = Notification.objects.filter(user=request.user, game__active=True, seen=False)
             for message in unread:
                 if message.is_bad:
@@ -32,8 +32,7 @@ def notifier(function):
                     messages.info(request, message.content)
                 message.seen = True
                 message.save()
-        finally:
-            return function(request, *args, **kwargs)
+        return function(request, *args, **kwargs)
 
     return new_func
 
@@ -214,12 +213,14 @@ def investigation_form(request):
 
 @notifier
 def daily_lynch(request, day):
-    try:
-        player = Player.objects.get(user=request.user, game__active=True)
-    except Player.DoesNotExist:
+    if request.user.is_authenticated():
+        try:
+            player = Player.objects.get(user=request.user, game__active=True)
+        except Player.DoesNotExist:
+            player = False
+    else:
         player = False
     # TODO implement tiebreaker
-    # TODO mayor triple vote
     game = Game.objects.get(active=True)
 
     # parameters from URLs are *strings* by default
