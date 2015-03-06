@@ -73,8 +73,6 @@ class SignUpForm(forms.Form):
     picture = forms.CharField(label="Picture URL")
 
 
-
-
 class MafiaPowerForm(forms.Form):
     target = forms.ModelChoiceField(queryset=Player.objects.filter(game__active=True))
 
@@ -87,7 +85,8 @@ class MafiaPowerForm(forms.Form):
                 self.fields['extra_field'] = need
             self.fields['power_id'] = forms.IntegerField(widget=forms.HiddenInput(), initial=power.id)
             if power.power == MafiaPower.SET_A_TRAP or power.power == MafiaPower.SLAUGHTER_THE_WEAK:
-                self.fields['target'] = forms.ModelChoiceField(queryset=Player.objects.filter(death=None, game=self.game))
+                self.fields['target'] = forms.ModelChoiceField(
+                    queryset=Player.objects.filter(death=None, game__active=True))
 
     def submit(self, user):
         charge = MafiaPower.objects.get(id=self.data['power_id'])

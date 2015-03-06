@@ -105,8 +105,8 @@
             {% endif %}
         </tr>
         {% for death in recent_deaths %}
-            <tr>
-                <td>{{ death.murderee.user.username }}</td>
+            <tr class="{% if death.day == death.murderee.game.current_day %}danger{% endif %}">
+            <td>{{ death.murderee.user.username }}</td>
                 <td>{{ death.where }}</td>
                 <td>{{ death.when|date:"M d, P" }}</td>
                 {% if game.god == user %}

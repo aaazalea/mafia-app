@@ -29,8 +29,9 @@
                 <ul class="nav navbar-nav">
                     <li><a href="http://mafia.mit.edu">Forums </a></li>
                     <li><a href="{% url "player_intros" %}">Players</a></li>
-                    <li><a href="{% url "logs" %}">Game Log</a></li>
                     {% if player %}
+                        <li><a href="{% url "logs" %}">Game Log</a></li>
+
                         <li><a href="{{ player.game.rules_url }}">Rules</a></li>
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
@@ -53,6 +54,8 @@
                     {% else %}
                         <li><a href="{{ game.rules_url }}">Rules</a></li>
                         {% if game.god == user %}
+                            <li><a href="{% url "logs" %}">Game Log</a></li>
+
                             <li class="dropdown">
                                 <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
                                    aria-expanded="false">God Powers

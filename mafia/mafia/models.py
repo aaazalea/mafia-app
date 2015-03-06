@@ -266,7 +266,7 @@ class Player(models.Model):
                                                     day=self.game.current_day,
                                                     investigation_type=Investigation.GAY_KNIGHT)) >= \
                     GAY_KNIGHT_INVESTIGATIONS:
-                if not self.gn_partner.alive and death.murderee == self.gn_partner:
+                if not self.gn_partner.alive and self.gn_partner.death.murderee == self.gn_partner:
                     return True
         if self.role == Role.objects.get(name__iexact='Desperado') and (
                         kind is None or kind == Investigation.DESPERADO):
@@ -304,7 +304,7 @@ class Player(models.Model):
             return True
         elif self.role == Role.objects.get(name__iexact='gay knight'):
             if not self.gn_partner.is_alive():
-                if Investigation.objects.filter(investigator=self, target=self.gn_partner.death.murderer).exists():
+                if Investigation.objects.filter(investigator=self, guess=self.gn_partner.death.murderer).exists():
                     return True
         return False
 
@@ -410,7 +410,7 @@ class Death(models.Model):
                     trap.state = MafiaPower.AVAILABLE
                     trap.target = None
                     trap.save()
-            if not (self.murderer and self.murderer.is_evil):
+            if not (self.murderer and self.murderer.is_evil()):
                 # TODO does not take into account conscripted innocents making kills with innocent powers
                 self.free = True
             kaboom = None
@@ -716,9 +716,10 @@ class MafiaPower(models.Model):
                 return "The mafia have failed to slaughter the weak on %s." % self.target
         elif self.power == MafiaPower.FRAME_A_TOWNSPERSON:
             return "The mafia frame %s for the death of %s." % (self.target, Player.objects.get(id=self.other_info))
-        elif self.power == MafiaPower.FRAME_A_TOWNSPERSON:
+        elif self.power == MafiaPower.PLANT_EVIDENCE:
             return "Mafia have planted evidence on %s as %s%s" % (
-                (self.target, "Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
+                (self.target, "Conscripted " if self.other_info < 0 else "",
+                 Role.objects.get(id=abs(int(self.other_info)))))
         elif self.power == MafiaPower.MANIPULATE_THE_PRESS:
             return "The mafia are manipulating the press on the death of %s." % self.target
         elif self.power == MafiaPower.HIRE_A_HITMAN:
@@ -747,6 +748,8 @@ class LogItem(models.Model):
         if user == self.game.god:
             return True
         elif self.mafia_can_view and Player.objects.filter(game=self.game, user=user, role__name="Mafia").exists():
+            return True
+        elif Player.objects.filter(game=self.game, user=user, death__isnull=False).exists():
             return True
         else:
             return self.users_can_view.filter(user=user).exists()

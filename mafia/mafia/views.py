@@ -113,17 +113,22 @@ def kill_report(request):
             killer = Player.objects.get(user=request.user, game__active=True)
             when = datetime.now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
-            try:
-                Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
+            # try:
+            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
                                      day=Game.objects.get(active=True).current_day, where=where)
-            except IndexError:
-                player = Player.objects.get(user=request.user, game__active=True)
-                messages.error(request,
-                               "This kill is illegal (perhaps mafia have killed already"
-                               " today or you're using a nonexistent kaboom?)")
-                return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
-                                                     'title': 'Report a Kill You Made'})
-
+            # except IndexError:
+            # player = Player.objects.get(user=request.user, game__active=True)
+            #     messages.error(request,
+            #                    "This kill is illegal (perhaps mafia have killed already"
+            #                    " today or you're using a nonexistent kaboom?)")
+            #     return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
+            #                                          'title': 'Report a Kill You Made'})
+            # except IntegrityError:
+            #     player = Player.objects.get(user=request.user, game__active=True)
+            #     messages.error(request,
+            #                    "That player is already dead (they probably beat you to reporting the kill).")
+            #     return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
+            #                                          'title': 'Report a Kill You Made'})
             return HttpResponseRedirect("/")
 
     else:
@@ -346,6 +351,7 @@ def go_desperado(request):
     player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
     if player.role_information == Player.DESPERADO_INACTIVE:
         player.role_information = Player.DESPERADO_ACTIVATING
+        player.game.log("%s  is going desperado tonight." % player, users_who_can_see=[player])
         player.save()
     return HttpResponseRedirect("/")
 
@@ -472,6 +478,7 @@ def evict_player(request, pid):
         Death.objects.create(murderee=player, day=player.game.current_day, when=datetime.now(),
                              where="Evicted (day %d)" % player.game.current_day)
         messages.success(request, "%s removed from game" % player.username)
+        game.log("%s evicted from game" % player)
     return HttpResponseRedirect(reverse('player_intros'))
 
 
@@ -482,6 +489,7 @@ def resurrect_player(request, pid):
         player = Player.objects.get(id=pid)
         Death.objects.get(murderee=player).delete()
         messages.success(request, "%s resurrected" % player.username)
+        game.log("%s ressurected by %s" % (player, game.god.username))
     return HttpResponseRedirect(reverse('player_intros'))
 
 
