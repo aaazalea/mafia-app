@@ -380,6 +380,8 @@ class Player(models.Model):
             links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
+        if self.role == Role.objects.get(name="Rogue"):
+            links.append(reverse('rogue_disarmed'), "Report that you were disarmed")
         return links
 
     def get_unread_notifications(self):
@@ -390,7 +392,7 @@ class Player(models.Model):
 
     def notify(self, message, bad=True):
         Notification.objects.create(user=self.user, game=self.game, seen=False, content=message, is_bad=bad)
-
+        self.game.log(message="Notification for %s: '%s'" % (self, message), users_who_can_see=[self])
 
 class Death(models.Model):
     murderer = models.ForeignKey(Player, related_name='kills', null=True)

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import AnonymousUser, User
+from django.db import IntegrityError
 from django.template.response import TemplateResponse
 from django.utils.http import is_safe_url
 from django.shortcuts import resolve_url
@@ -10,13 +11,14 @@ from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.contrib.auth import (REDIRECT_FIELD_NAME, login as auth_login, logout)
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
     ConspiracyListForm, SignUpForm
 from django.shortcuts import render
+from settings import ROGUE_KILL_WAIT
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification
 from django.core.urlresolvers import reverse
 
@@ -72,34 +74,26 @@ def index(request):
 
 @notifier
 @login_required
+@user_passes_test(
+    lambda user: user.is_authenticated() and Player.objects.filter(user=user, death=None, game__active=True).exists(),
+    login_url='/')
 def death_report(request):
-    if request.method == "POST":
-        form = DeathReportForm(request.POST)
-        if form.is_valid():
-            where = form.data['where']
-            killer = Player.objects.get(id=form.data['killer'])
-            killed = Player.objects.get(user=request.user, game__active=True)
-            if not killed.alive:
-                messages.add_message(request, messages.WARNING, "You're already dead.")
-                return HttpResponseRedirect("/")
-            when = datetime.now() - timedelta(minutes=int(form.data['when']))
-            kaboom = 'kaboom' in form.data
-            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, where=where,
-                                 day=Game.objects.get(active=True).current_day)
-            return HttpResponseRedirect("/")
+    form = DeathReportForm(request.POST or None)
+    me = Player.objects.get(user=request.user, game__active=True)
+    if form.is_valid():
+        where = form.data['where']
+        killer = Player.objects.get(id=form.data['killer'])
+        killed = me
+
+        when = datetime.now() - timedelta(minutes=int(form.data['when']))
+        kaboom = 'kaboom' in form.data
+        Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, where=where,
+                             day=Game.objects.get(active=True).current_day)
+        return HttpResponseRedirect("/")
 
     else:
-        try:
-            me = Player.objects.get(user=request.user, game__active=True)
-        except Player.DoesNotExist:
-            return HttpResponse("You don't have a role in any currently active game.")
-        if me.is_alive():
-            form = DeathReportForm()
-            return render(request, 'form.html', {'form': form, 'player': me, 'title': 'Report your own death',
-                                                 'url': reverse('forms:death')})
-        else:
-            messages.add_message(request, messages.ERROR, "You're dead already")
-            return HttpResponseRedirect("/")
+        return render(request, 'form.html', {'form': form, 'player': me, 'title': 'Report your own death',
+                                             'url': reverse('forms:death')})
 
 
 @notifier
@@ -113,22 +107,22 @@ def kill_report(request):
             killer = Player.objects.get(user=request.user, game__active=True)
             when = datetime.now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
-            # try:
-            Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
+            try:
+                Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
                                      day=Game.objects.get(active=True).current_day, where=where)
-            # except IndexError:
-            # player = Player.objects.get(user=request.user, game__active=True)
-            #     messages.error(request,
-            #                    "This kill is illegal (perhaps mafia have killed already"
-            #                    " today or you're using a nonexistent kaboom?)")
-            #     return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
-            #                                          'title': 'Report a Kill You Made'})
-            # except IntegrityError:
-            #     player = Player.objects.get(user=request.user, game__active=True)
-            #     messages.error(request,
-            #                    "That player is already dead (they probably beat you to reporting the kill).")
-            #     return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
-            #                                          'title': 'Report a Kill You Made'})
+            except IndexError:
+                player = Player.objects.get(user=request.user, game__active=True)
+                messages.error(request,
+                               "This kill is illegal (perhaps mafia have killed already"
+                               " today or you're using a nonexistent kaboom?)")
+                return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
+                                                     'title': 'Report a Kill You Made'})
+            except IntegrityError:
+                player = Player.objects.get(user=request.user, game__active=True)
+                messages.error(request,
+                               "That player is already dead (they probably beat you to reporting the kill).")
+                return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:kill'),
+                                                     'title': 'Report a Kill You Made'})
             return HttpResponseRedirect("/")
 
     else:
@@ -163,9 +157,6 @@ def recent_deaths(request):
 @login_required
 def your_role(request):
     game = Game.objects.get(active=True)
-    if request.user == game.god:
-        # TODO What should this page return?
-        pass
     try:
         player = Player.objects.get(game=game, user=request.user)
     except Player.DoesNotExist:
@@ -213,6 +204,18 @@ def investigation_form(request):
     else:
         messages.add_message(request, messages.ERROR, "Dead people can't make investigations.")
 
+    return HttpResponseRedirect("/")
+
+
+@notifier
+@login_required
+@user_passes_test(
+    lambda user: user.is_authenticated() and Player.objects.filter(user=user, death=None, game__active=True,
+                                                                   role__name="Rogue").exists(),
+    login_url='/')
+def rogue_disarmed(request):
+    p = Player.objects.get(user=request.user, game__active=True)
+    p.role_information = p.game.current_day + ROGUE_KILL_WAIT
     return HttpResponseRedirect("/")
 
 
@@ -449,10 +452,10 @@ def mafia_power_form(request):
 def mafia_powers(request):
     game = Game.objects.get(active=True)
     if request.user == game.god:
-        return render(request, "mafia_powers.html", {'user': request.user, 'game': game})
+        return render(request, "mafia_powers.html", {'user': request.user, 'game': game, 'usable': False})
     player = Player.objects.get(user=request.user, game__active=True)
-    if player.is_evil:
-        return render(request, "mafia_powers.html", {'player': player, 'game': game})
+    if player.is_evil() or not player.is_alive:
+        return render(request, "mafia_powers.html", {'player': player, 'game': game, 'usable': True})
     else:
         messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
         return HttpResponseRedirect("/")

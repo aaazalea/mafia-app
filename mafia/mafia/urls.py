@@ -17,10 +17,12 @@ urlpatterns = patterns('',
                        url(r'^player-intros/$', 'mafia.views.player_intros', name='player_intros'),
                        url(r'^mafia-powers/$', 'mafia.views.mafia_powers', name='mafia_powers'),
                        url(r'^logs/$', 'mafia.views.logs', name='logs'),
+                       url(r'^rogue-disarmed/$', 'mafia.views.rogue_disarmed', name='rogue_disarmed'),
 
                        url(r'^end-game/$', 'mafia.views.end_game', name='end_game'),
                        url(r'^evict-player/(?P<pid>\d+)', 'mafia.views.evict_player', name='evict_player'),
                        url(r'^resurrect-player/(?P<pid>\d+)', 'mafia.views.resurrect_player', name='resurrect_player'),
+                       url(r'^advance-day/$', 'mafia.views.advance_day', name='advance_day'),
                        url(r'^advance-day/$', 'mafia.views.advance_day', name='advance_day'),
 
                        url(r'^admin/', include(admin.site.urls)),
