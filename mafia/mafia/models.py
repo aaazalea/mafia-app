@@ -296,7 +296,7 @@ class Player(models.Model):
             return not self.rogue_cant_kill
         elif self.role == Role.objects.get(name__iexact='vigilante'):
             for kill in self.kills.all():
-                if not kill.murderee.is_evil():
+                if not (kill.murderee.is_evil() or kill.murderee.role == Role.objects.get(name__iexact='Rogue')):
                     return False
                 elif kill.day == self.game.current_day:
                     # can't kill again today
