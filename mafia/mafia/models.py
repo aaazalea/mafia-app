@@ -177,7 +177,7 @@ class Player(models.Model):
         :return: False if the rogue can kill now, otherwise the next kill day
         """
         next_kill_day = self.role_information
-        if self.game.current_day >= self.role_information:
+        if self.game.current_day >= next_kill_day:
             if not self.kills.exists():
                 return False
             else:
@@ -189,7 +189,7 @@ class Player(models.Model):
                 else:
                     return False
 
-    rogue_cant_kill = property(cant_rogue_kill)
+    next_rogue_kill_day = property(cant_rogue_kill)
 
     def additional_info(self):
         if self.role == Role.objects.get(name__iexact='gay knight'):
@@ -198,10 +198,10 @@ class Player(models.Model):
             else:
                 return "Your Gay Knight partner has not been assigned yet."
         elif self.role == Role.objects.get(name__iexact="rogue"):
-            if not self.rogue_cant_kill:
+            if not self.next_rogue_kill_day:
                 return "You are currently permitted to make kills."
             else:
-                return "You are next allowed to kill on <b> day %d</b>." % self.rogue_cant_kill
+                return "You are next allowed to kill on <b> day %d</b>." % self.next_rogue_kill_day
         elif self.role == Role.objects.get(name__iexact="desperado"):
             if self.role_information == Player.DESPERADO_INACTIVE:
                 return "You have not gone desperado yet."
@@ -293,7 +293,7 @@ class Player(models.Model):
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
             return True
         elif self.role == Role.objects.get(name__iexact='rogue'):
-            return not self.rogue_cant_kill
+            return not self.next_rogue_kill_day
         elif self.role == Role.objects.get(name__iexact='vigilante'):
             for kill in self.kills.all():
                 if not (kill.murderee.is_evil() or kill.murderee.role == Role.objects.get(name__iexact='Rogue')):
@@ -373,12 +373,15 @@ class Player(models.Model):
             links.append((reverse('forms:investigation'), "Make an investigation"))
         if self.role == Role.objects.get(name="Desperado") and self.role_information == Player.DESPERADO_INACTIVE:
             links.append((
-                "javascript:if(confirm('Are you sure you want to go desperado?')==true){window.location.href='%s'}" % reverse(
+                "javascript:if(confirm('Are you sure you want to go desperado?')"
+                "==true){window.location.href='%s'}" % reverse(
                     'go_desperado'), "Go desperado"))
         if self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
             links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
+        if self.role == Role.objects.get(name="Rogue"):
+            links.append(reverse('rogue_disarmed'), "Report that you were disarmed")
         return links
 
     def get_unread_notifications(self):
@@ -389,7 +392,7 @@ class Player(models.Model):
 
     def notify(self, message, bad=True):
         Notification.objects.create(user=self.user, game=self.game, seen=False, content=message, is_bad=bad)
-
+        self.game.log(message="Notification for %s: '%s'" % (self, message), users_who_can_see=[self])
 
 class Death(models.Model):
     murderer = models.ForeignKey(Player, related_name='kills', null=True)
