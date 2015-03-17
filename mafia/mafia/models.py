@@ -69,7 +69,7 @@ class Game(models.Model):
             self.current_day += 1
             LogItem.objects.create(anonymous_text="Day %d start" % self.current_day,
                                    text="Day %d start" % self.current_day,
-                               game=self, day_start=self)
+                                   game=self, day_start=self)
         self.save()
 
 
@@ -406,6 +406,7 @@ class Player(models.Model):
         Notification.objects.create(user=self.user, game=self.game, seen=False, content=message, is_bad=bad)
         self.game.log_notification(message="Notification for %s: '%s'" % (self, message), users_who_can_see=[self])
 
+
 class Death(models.Model):
     murderer = models.ForeignKey(Player, related_name='kills', null=True)
     when = models.DateTimeField()
@@ -467,7 +468,20 @@ class Death(models.Model):
                                        mafia_can_see=self.murderer.is_evil(),
                                        users_who_can_see=[self.murderer, self.murderee])
 
-                # TODO if not self.kaboom and self.murderee.has_microphone()
+                if not self.kaboom and self.murderee.has_microphone():
+                    # TODO Don
+                    for mic in Item.objects.filter(owner=self.murderee, type=Item.MICROPHONE):
+                        number = mic.number
+                        # TODO should mics transfer upon death?
+                        mic.used = self.when
+                        if Item.objects.filter(type=Item.RECEIVER, number=number, owner__isnull=False).exists():
+                            receiver = Item.objects.get(type=Item.RECEIVER, number=number)
+                            Game.log(message="%s has heard from Receiver %d that %s killed %s." % (
+                                receiver.owner, number, self.murderee, self.murderer),
+                                     users_who_can_see=[receiver.owner])
+                            receiver.owner.notify("You hear something from Receiver %d! %s killed %s!" % (
+                            number, self.murderer, self.murderee))
+                            receiver.used = self.when
 
         super(Death, self).save(*args, **kwargs)
 
@@ -581,9 +595,11 @@ class Item(models.Model):
     )
 
     game = models.ForeignKey(Game)
-    owner = models.ForeignKey(Player)
+    owner = models.ForeignKey(Player, null=True)
     number = models.IntegerField()
     type = models.CharField(max_length=2, choices=ITEM_TYPE)
+    used = models.DateTimeField(null=True)
+    target = models.ForeignKey(Player, null=True, related_name="items_targeted_by")
 
     def get_password(self):
         if not hasattr(self, "secret"):
@@ -605,6 +621,24 @@ class Item(models.Model):
             if a == self.type:
                 return "%s %d (%s)" % (b, self.number, self.game.name)
         return "????? (Item)"
+
+    def use(self, target=None):
+        if self.type == Item.SHOVEL and not target.is_alive():
+            text = target.death.get_shovel_text()
+            Game.log(message="%s shoveled %s and got a result of %s." % (self.owner, target, text),
+                     users_who_can_see=[self.owner])
+            self.used = datetime()
+            self.target = target
+            return text
+        if self.type == Item.MEDKIT:
+            Game.log(message="%s activated a medkit." % (self.owner), users_who_can_see=[self.owner])
+            self.used = datetime()
+        return None
+        if self.type == Item.TASER:
+            Game.log(message="%s tased %s." % (self.owner), users_who_can_see=[self.owner, self.target])
+            self.used = datetime()
+            self.target = target()
+        return None
 
 
 class MafiaPower(models.Model):
