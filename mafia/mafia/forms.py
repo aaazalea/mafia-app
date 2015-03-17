@@ -1,6 +1,7 @@
 from math import ceil
 
 from django.core.exceptions import ValidationError
+from django.forms import ModelMultipleChoiceField
 from models import *
 from settings import *
 
@@ -144,3 +145,8 @@ class ConspiracyListForm(forms.Form):
             if conspiracy_size > CONSPIRACY_LIST_SIZE:
                 raise ValidationError("You may only have %d people on your conspiracy list." % CONSPIRACY_LIST_SIZE)
         return self.cleaned_data['new_conspiracy_list']
+
+
+class InnocentChildRevealForm(forms.Form):
+    players_revealed_to = ModelMultipleChoiceField(Player.objects.filter(game__active=True, death=None),
+                                                   label="Reveal to whom?")

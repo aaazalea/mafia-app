@@ -7,5 +7,6 @@ urlpatterns = patterns('',
                        url(r'^lynch-vote/$', 'mafia.views.lynch_vote', name='vote'),
                        url(r'^mafia-power/$', 'mafia.views.mafia_power_form', name='mafia_power'),
                        url(r'^conspiracy_list/$', 'mafia.views.conspiracy_list_form', name='conspiracy_list'),
-                       url(r'^sign-up/$', 'mafia.views.sign_up', name='sign_up')
+                       url(r'^sign-up/$', 'mafia.views.sign_up', name='sign_up'),
+                       url(r'^ic-reveal/$', 'mafia.views.ic_reveal', name='ic_reveal')
 )

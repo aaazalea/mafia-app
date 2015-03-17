@@ -24,7 +24,12 @@ class Game(models.Model):
                                           mafia_can_view=mafia_can_see)
         else:
             item = LogItem.objects.create(text=message, mafia_can_view=mafia_can_see, game=self)
-        item.game = self
+        for user in users_who_can_see:
+            item.users_can_view.add(user)
+        item.save()
+
+    def log_notification(self, message=None, users_who_can_see=[]):
+        item = LogItem.objects.create(text=message, mafia_can_view=False, game=self, show_all=False)
         for user in users_who_can_see:
             item.users_can_view.add(user)
         item.save()
@@ -61,10 +66,12 @@ class Game(models.Model):
 
                 player.increment_day()
 
-        self.current_day += 1
-        self.save()
-        LogItem.objects.create(anonymous_text="Day %d start" % self.current_day, text="Day %d start" % self.current_day,
+            self.current_day += 1
+            LogItem.objects.create(anonymous_text="Day %d start" % self.current_day,
+                                   text="Day %d start" % self.current_day,
                                game=self, day_start=self)
+        self.save()
+
 
     def kill_day_end(self, player, why):
         Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
@@ -381,7 +388,9 @@ class Player(models.Model):
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
         if self.role == Role.objects.get(name="Rogue"):
-            links.append(reverse('rogue_disarmed'), "Report that you were disarmed")
+            links.append((reverse('rogue_disarmed'), "Report that you were disarmed"))
+        if self.role == Role.objects.get(name="Innocent Child"):
+            links.append((reverse('forms:ic_reveal'), "Trust someone"))
         return links
 
     def get_unread_notifications(self):
@@ -392,7 +401,7 @@ class Player(models.Model):
 
     def notify(self, message, bad=True):
         Notification.objects.create(user=self.user, game=self.game, seen=False, content=message, is_bad=bad)
-        self.game.log(message="Notification for %s: '%s'" % (self, message), users_who_can_see=[self])
+        self.game.log_notification(message="Notification for %s: '%s'" % (self, message), users_who_can_see=[self])
 
 class Death(models.Model):
     murderer = models.ForeignKey(Player, related_name='kills', null=True)
@@ -746,14 +755,15 @@ class LogItem(models.Model):
     users_can_view = models.ManyToManyField(Player, blank=True)
     time = models.DateTimeField(auto_now_add=True)
     day_start = models.BooleanField(default=False)
+    show_all = models.BooleanField(default=True)
 
     def visible_to(self, user):
         if user == self.game.god:
-            return True
+            return self.show_all
         elif self.mafia_can_view and Player.objects.filter(game=self.game, user=user, role__name="Mafia").exists():
             return True
         elif Player.objects.filter(game=self.game, user=user, death__isnull=False).exists():
-            return True
+            return self.show_all
         else:
             return self.users_can_view.filter(user=user).exists()
 

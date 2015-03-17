@@ -16,7 +16,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification
@@ -49,6 +49,11 @@ def index(request):
     except Game.DoesNotExist:
         logout(request)
         return HttpResponseRedirect("/accounts/login")
+
+    if game.current_day == 0:
+        messages.info(request,
+                      "Game has not started yet, only pregame actions may be taken."
+                      " Click on the top-right corner of the screen to find out your role.")
     try:
         u = request.user
         if not isinstance(u, AnonymousUser):
@@ -66,7 +71,7 @@ def index(request):
         params['vote'] = player.lynch_vote_made(game.current_day)
         params['player'] = player
 
-    params['recent_deaths'] = Death.objects.filter(murderee__game__active=True).order_by('-when')[:10]
+    params['recent_deaths'] = Death.objects.filter(murderee__game__active=True).order_by('-when', 'murderee')[:10]
 
     return render(request, 'index.html',
                   params)
@@ -78,6 +83,10 @@ def index(request):
     lambda user: user.is_authenticated() and Player.objects.filter(user=user, death=None, game__active=True).exists(),
     login_url='/')
 def death_report(request):
+    game = Game.objects.get(active=True)
+    if game.current_day == 0:
+        messages.warning(request, "You're not allowed to die, game hasn't started yet!")
+        return HttpResponseRedirect("/")
     form = DeathReportForm(request.POST or None)
     me = Player.objects.get(user=request.user, game__active=True)
     if form.is_valid():
@@ -99,6 +108,11 @@ def death_report(request):
 @notifier
 @login_required
 def kill_report(request):
+    game = Game.objects.get(active=True)
+    if game.current_day == 0:
+        messages.warning(request, "You're not allowed to kill anyone, game hasn't started yet!")
+        return HttpResponseRedirect("/")
+
     if request.method == "POST":
         form = KillReportForm(request.POST)
         if form.is_valid():
@@ -141,7 +155,7 @@ def kill_report(request):
 def recent_deaths(request):
     game = Game.objects.get(active=True)
     is_god = request.user == game.god
-    recents = Death.objects.filter(murderee__game__active=True).order_by('-when')
+    recents = Death.objects.filter(murderee__game__active=True).order_by('-when', 'murderee')
     if isinstance(request.user, AnonymousUser):
         return render(request, 'recent_deaths.html',
                       {'god': is_god, 'deaths': recents, 'game': game, 'user': request.user})
@@ -262,9 +276,9 @@ def lynch_vote(request):
     player = Player.objects.get(user=request.user, game__active=True)
     game = player.game
 
-    if not Death.objects.filter(murderer__game=game).exists():
-        messages.add_message(request, messages.INFO, "You can't lynch anyone yet - nobody has been killed.")
-        return HttpResponseRedirect("/")
+    # if not Death.objects.filter(murderer__game=game).exists():
+    # messages.add_message(request, messages.INFO, "You can't lynch anyone yet - nobody has been killed.")
+    # return HttpResponseRedirect("/")
     if player.is_alive():
         if request.method == "POST":
             form = LynchVoteForm(request.POST)
@@ -540,3 +554,53 @@ def logs(request):
     except Player.DoesNotExist:
         player = None
     return render(request, "logs.html", {'player': player, 'user': request.user, 'logs': game_logs, 'game': game})
+
+
+@notifier
+@login_required
+@user_passes_test(
+    lambda user: user.is_authenticated() and Player.objects.filter(user=user, death=None, game__active=True,
+                                                                   role__name="Innocent Child").exists(),
+    login_url='/')
+def ic_reveal(request):
+    form = InnocentChildRevealForm(request.POST or None)
+    if form.is_valid():
+        data = form.data['players_revealed_to']
+        if isinstance(data, unicode):
+            data = [data]
+        revealed_to = [Player.objects.get(id=int(p)) for p in data]
+        if revealed_to:
+            game = revealed_to[0].game
+            revealer = Player.objects.get(game=game, user=request.user)
+            for revelee in revealed_to:
+                game.log(message="%s is an innocent child and trusts %s" % (revealer, revelee),
+                         users_who_can_see=[revealer, revelee])
+                revelee.notify("%s is an innocent child and trusts you." % revealer, bad=False)
+            messages.success(request, "You have successfully revealed as an IC.")
+        return HttpResponseRedirect("/")
+    player = Player.objects.get(game__active=True, user=request.user)
+    return render(request, "form.html", {'player': player, 'form': form})
+
+
+def old_logs(request, game_id):
+    game = Game.objects.get(id=game_id, archived=True)
+    game_logs = [(log_item.get_text(game.god), log_item.time, log_item.is_day_start()) for log_item in
+                 game.logitem_set.all()]
+    game_logs.sort(key=lambda a: a[1])
+    try:
+        current_game = Game.objects.get(active=True)
+    except Game.DoesNotExist:
+        current_game = False
+    if current_game == game:
+        return HttpResponseRedirect(reverse("game_log"))
+
+    return render(request, "old_logs.html", {'logs': game_logs, 'game': game, 'current_game': current_game})
+
+
+def past_games(request):
+    try:
+        current_game = Game.objects.get(active=True)
+    except Game.DoesNotExist:
+        current_game = False
+
+    return render(request, "past_games.html", {'games': Game.objects.all(), 'current_game': current_game})

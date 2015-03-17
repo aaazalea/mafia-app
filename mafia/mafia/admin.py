@@ -36,9 +36,9 @@ class GameAdmin(admin.ModelAdmin):
     def advance_day(self, request, queryset):
         for g in queryset:
             g.increment_day()
-        self.message_user(request, "Advanced day(s) successfully")
+        self.message_user(request, "Activated game(s) successfully")
 
-    advance_day.short_description = "Advance day / Start game"
+    advance_day.short_description = "Activate game"
 
     def archive_games(self, request, queryset):
         for g in queryset:
