@@ -1,0 +1,18 @@
+{% extends "base2.html" %}
+{% block title %}Past Games{% endblock %}
+
+
+{% block main %}
+    <table class="table">
+        <tr>
+            <th>Game</th>
+            <th>God</th>
+        </tr>
+        {% for game in games %}
+            <tr>
+                <td><a href="{% url "old_logs" game.id %}">{{ game.name }}</a></td>
+                <td>{{ game.god }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+{% endblock %}

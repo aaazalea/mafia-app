@@ -384,7 +384,7 @@ def login(request, template_name='registration/login.html',
     Displays the login form and handles the login action.
     """
     if not Game.objects.filter(active=True).exists():
-        return HttpResponse("There is no active mafia game. <a href=\"/admin\">Log in as admin</a>.")
+        return HttpResponseRedirect(reverse('past_games'))
     redirect_to = request.POST.get(redirect_field_name,
                                    request.GET.get(redirect_field_name, ''))
 
@@ -592,7 +592,7 @@ def old_logs(request, game_id):
     except Game.DoesNotExist:
         current_game = False
     if current_game == game:
-        return HttpResponseRedirect(reverse("game_log"))
+        return HttpResponseRedirect(reverse("logs"))
 
     return render(request, "old_logs.html", {'logs': game_logs, 'game': game, 'current_game': current_game})
 

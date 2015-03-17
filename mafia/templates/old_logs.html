@@ -3,9 +3,18 @@
 
 
 {% block main %}
-    <table class="table">
-    <tr><th>Player</th><th>Role</th></tr>
-    {% for player in game.player_set %}
+    <table class="table table-bordered">
+        <tr><th>Player</th><th>Role</th></tr>
+        <tr>
+            <td>{{ game.god }}</td>
+            <td>God</td>
+        </tr>
+        {% for player in game.players_in_role_order %}
+            <tr>
+                <td>{{ player.username }}</td>
+                <td>{{ player.role.name }}</td>
+            </tr>
+        {% endfor %}
     </table>
     <table class="table">
         <tr>
