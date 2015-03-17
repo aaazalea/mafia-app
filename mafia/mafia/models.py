@@ -47,7 +47,7 @@ class Game(models.Model):
     number_of_living_players = property(get_number_of_living_players)
 
     def increment_day(self):
-        if self.current_day == 0:
+        if self.current_day == 0 and not self.active:
             # start the game
             self.active = True
         else:

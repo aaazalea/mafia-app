@@ -340,25 +340,27 @@ def sign_up(request):
         email = form.data['email']
         picture = form.data['picture']
         intro = form.data['introduction']
-        if password != confirm_password:
-            messages.error(request, "Password must match confirmation")
-            return render('sign_up.html', {'form': form, 'game': game})
-
-        if password == '':
-            try:
-                user = User.objects.get(username=username)
-            except User.DoesNotExist:
-                messages.error(request, "You don't have an account; please set a password.")
-                return render('sign_up.html', {'form': form, 'game': game})
-        else:
-            user = User.objects.create(username=username)
-            user.set_password(password)
-            user.email = email
-            user.save()
-        Player.objects.create(user=user, game=game, introduction=intro, photo=picture)
-
-        return HttpResponse("You signed up for mafia game \"%s\" successfully" % game.name)
-
+        try:
+            user = User.objects.get(username=username)
+            if not user.check_password(password):
+                messages.error(request, "Wrong password.")
+                return render(request, 'sign_up.html', {'form': form, 'game': game})
+        except User.DoesNotExist:
+            if password != confirm_password:
+                messages.error(request, "Password must match confirmation.")
+                return render(request, 'sign_up.html', {'form': form, 'game': game})
+            else:
+                user = User.objects.create(username=username)
+                user.set_password(password)
+                user.email = email
+                user.save()
+        try:
+            Player.objects.create(user=user, game=game, introduction=intro, photo=picture)
+        except IntegrityError:
+            messages.warning(request, "You're already signed up for this game.")
+            return HttpResponseRedirect(reverse("past_games"))
+        messages.success(request, "You signed up for mafia game \"%s\" successfully" % game.name)
+        return HttpResponseRedirect(reverse("past_games"))
     return render(request, 'sign_up.html', {'form': form, 'game': game})
 
 
@@ -593,8 +595,12 @@ def old_logs(request, game_id):
         current_game = False
     if current_game == game:
         return HttpResponseRedirect(reverse("logs"))
-
-    return render(request, "old_logs.html", {'logs': game_logs, 'game': game, 'current_game': current_game})
+    try:
+        next_game = Game.objects.get(active=False, archived=False)
+    except Game.DoesNotExist:
+        next_game = False
+    return render(request, "old_logs.html",
+                  {'logs': game_logs, 'game': game, 'current_game': current_game, 'next_game': next_game})
 
 
 def past_games(request):
@@ -602,5 +608,11 @@ def past_games(request):
         current_game = Game.objects.get(active=True)
     except Game.DoesNotExist:
         current_game = False
+    try:
+        next_game = Game.objects.get(active=False, archived=False)
+    except Game.DoesNotExist:
+        next_game = False
 
-    return render(request, "past_games.html", {'games': Game.objects.all(), 'current_game': current_game})
+    games = Game.objects.all()
+    return render(request, "past_games.html",
+                  {'games': games, 'current_game': current_game, 'next_game': next_game})

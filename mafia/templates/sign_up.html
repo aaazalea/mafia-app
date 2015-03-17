@@ -1,13 +1,16 @@
 {% extends "bootstrap3/bootstrap3.html" %}
 {% load bootstrap3 %}
+{% block bootstrap3_title %}Sign Up - Mafia{% endblock %}
 {% block bootstrap3_content %}
+    {% bootstrap_messages %}
+
     <link rel="stylesheet" type="text/css" href="/static/signin.css"/>
     <div class="container">
 
         {% if game %}
             <form action="/form/sign-up/" method='post'>
 
-                <h2 class="form-signin-heading">Sign up for "{{ game.name }}" Mafia Game</h2>
+                <h2 class="form-signin-heading">Mafia Sign-up: {{ game.name }}</h2>
 
                 <table>{% csrf_token %}
 
@@ -17,11 +20,12 @@
                             required="required" title="" type="text"/></div>
                     <div class="form-group"><label class="control-label" for="id_password">Password: </label><input
                             class="form-control" id="id_password" maxlength="200" name="password"
-                            placeholder="(only if you don't have an account already)"
+                            placeholder="Make one up if you don't have an account on mafia-app.mit.edu yet"
                             title="" type="password"/></div>
                     <div class="form-group"><label class="control-label" for="id_confirm_password">Confirm
                         password: </label><input class="form-control" id="id_confirm_password" maxlength="200"
-                                                 name="confirm_password" placeholder="" title=""
+                                                 name="confirm_password" title=""
+                                                 placeholder="(only if you don't have an account already)"
                                                  type="password"/></div>
                     <div class="form-group"><label class="control-label" for="id_email">Email Address:</label><input
                             class="form-control" id="id_email" maxlength="50" name="email"
@@ -31,15 +35,17 @@
                                                    for="id_introduction">Introduction:</label><textarea
                             class="form-control" id="id_introduction" name="introduction"
                             placeholder="Please enter a full introduction, indicating who you are, where you will be regularly, where you live, your name, and how to kill you. If your introduction is insufficient, you may be removed from game."
-                            required="required" title=""></textarea></div></div>
-            <div class="form-group"><label class="control-label" for="id_picture">Picture URL:</label><input
-                    class="form-control" id="id_picture" name="picture"
-                    placeholder="Please put the URL of a picture of you. Try to crop it so you're the only one. INCLUDE HTTP://"
-                    required="required" title="" type="text"/></div></div>
-            </table>
-            <button class="btn btn-lg btn-primary btn-block" type="submit">Sign Up</button>
+                            required="required" title=""></textarea></div>
+                    <div class="form-group"><label class="control-label" for="id_picture">Picture URL:</label><input
+                            class="form-control" id="id_picture" name="picture"
+                            placeholder="Please put the URL of a picture of you. Try to crop it so you're the only one. INCLUDE HTTP://"
+                            required="required" title="" type="text"/></div>
+                </table>
+                <button class="btn btn-lg btn-primary btn-block" type="submit">Sign Up</button>
             </form>
         {% else %}
             <h2 class="form-signin-heading">No available sign-up right now.</h2>
         {% endif %}
+    </div>
+
 {% endblock %}

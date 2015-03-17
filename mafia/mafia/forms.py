@@ -63,7 +63,7 @@ class SignUpForm(forms.Form):
     username = forms.CharField(max_length=30, label="Username")
     password = forms.CharField(max_length=200, label="Password: ",
                                widget=forms.PasswordInput(),
-                               required=False)
+                               required=True)
     confirm_password = forms.CharField(max_length=200,
                                        label="Confirm password: ",
                                        widget=forms.PasswordInput(),

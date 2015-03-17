@@ -72,8 +72,15 @@
                 </ul>
                 <ul class="nav navbar-nav navbar-right">
                     {% if player %}
-                        <li class="navbar-text">Day <b>{{ player.game.current_day }}</b> of
-                            <b>{{ player.game.name }}</b>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
+                               aria-expanded="false">
+                                Day <b>{{ player.game.current_day }}</b> of <b>{{ player.game.name }}</b><span
+                                    class="caret"></span></a>
+                            <ul class="dropdown-menu" role="menu">
+                                <li><a href="{% url "past_games" %}">Game Archive</a></li>
+                            </ul>
+
                         </li>
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
@@ -85,7 +92,15 @@
                             </ul>
                         </li>
                     {% elif user.username %}
-                        <li class="navbar-text">Day <b>{{ game.current_day }}</b> of <b>{{ game.name }}</b>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
+                               aria-expanded="false">
+                                Day <b>{{ game.current_day }}</b> of <b>{{ game.name }}</b><span
+                                    class="caret"></span></a>
+                            <ul class="dropdown-menu" role="menu">
+                                <li><a href="{% url "past_games" %}">Game Archive</a></li>
+                            </ul>
+
                         </li>
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
@@ -98,7 +113,16 @@
                             </ul>
                         </li>
                     {% else %}
-                        <li class="navbar-text">Day <b>{{ game.current_day }}</b> of <b>{{ game.name }}</b></li>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
+                               aria-expanded="false">
+                                Day <b>{{ game.current_day }}</b> of <b>{{ game.name }}</b><span
+                                    class="caret"></span></a>
+                            <ul class="dropdown-menu" role="menu">
+                                <li><a href="{% url "past_games" %}">Game Archive</a></li>
+                            </ul>
+
+                        </li>
                         <li><a href="{% url 'accounts:login' %}">Log in</a></li>
 
                     {% endif %}

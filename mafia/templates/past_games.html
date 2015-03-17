@@ -1,5 +1,5 @@
 {% extends "base2.html" %}
-{% block title %}Past Games{% endblock %}
+{% block title %}Game Archive{% endblock %}
 
 
 {% block main %}
@@ -10,7 +10,12 @@
         </tr>
         {% for game in games %}
             <tr>
-                <td><a href="{% url "old_logs" game.id %}">{{ game.name }}</a></td>
+                <td>{% if not game.archived and not game.active %}Sign up for {% endif %}<a href="
+
+
+                        {% if game.archived or game.active %}{% url "old_logs" game.id %}{% else %}{% url "forms:sign_up" %}{% endif %}">
+                    {{ game.name }}{% if game.active %} (current game){% endif %}</a>
+                </td>
                 <td>{{ game.god }}</td>
             </tr>
         {% endfor %}
