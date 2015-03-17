@@ -108,6 +108,9 @@ class Game(models.Model):
         else:
             return [], []
 
+    def players_in_role_order(self):
+        return self.player_set.order_by("role__name").all()
+
 
 class Role(models.Model):
     name = models.CharField(max_length=20)
