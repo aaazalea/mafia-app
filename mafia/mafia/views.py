@@ -355,6 +355,8 @@ def sign_up(request):
                 user.email = email
                 user.save()
         try:
+            if picture[:4].lower() != "http":
+                picture = "http://" + picture
             Player.objects.create(user=user, game=game, introduction=intro, photo=picture)
         except IntegrityError:
             messages.warning(request, "You're already signed up for this game.")

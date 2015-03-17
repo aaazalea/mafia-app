@@ -17,29 +17,33 @@
                     <div class="form-group"><label class="control-label" for="id_username">Username</label><input
                             class="form-control" id="id_username" maxlength="30" name="username"
                             placeholder="The same as on mafia.mit.edu, but without spaces"
-                            required="required" title="" type="text"/></div>
+                            required="required" title="" type="text" value="{{ form.cleaned_data.username }}"/></div>
                     <div class="form-group"><label class="control-label" for="id_password">Password: </label><input
                             class="form-control" id="id_password" maxlength="200" name="password"
                             placeholder="Make one up if you don't have an account on mafia-app.mit.edu yet"
-                            title="" type="password"/></div>
+                            title="" type="password" value="
+                            {% if form.cleaned_data.password == form.cleaned_data.confirm_password %}{{ form.cleaned_data.password }}{% endif %}"/>
+                    </div>
                     <div class="form-group"><label class="control-label" for="id_confirm_password">Confirm
                         password: </label><input class="form-control" id="id_confirm_password" maxlength="200"
                                                  name="confirm_password" title=""
                                                  placeholder="(only if you don't have an account already)"
-                                                 type="password"/></div>
+                                                 type="password" value="
+                            {% if form.cleaned_data.password == form.cleaned_data.confirm_password %}{{ form.cleaned_data.password }}{% endif %}"/>
+                    </div>
                     <div class="form-group"><label class="control-label" for="id_email">Email Address:</label><input
                             class="form-control" id="id_email" maxlength="50" name="email"
                             placeholder="(only if you don't have an account already)"
-                            title="" type="email"/></div>
+                            title="" type="email" value="{{ form.cleaned_data.email }}"/></div>
                     <div class="form-group"><label class="control-label"
                                                    for="id_introduction">Introduction:</label><textarea
                             class="form-control" id="id_introduction" name="introduction"
-                            placeholder="Please enter a full introduction, indicating who you are, where you will be regularly, where you live, your name, and how to kill you. If your introduction is insufficient, you may be removed from game."
-                            required="required" title=""></textarea></div>
+                            placeholder="Please enter a full introduction, indicating who you are, where you will be regularly, where you live, and how to kill you. If your introduction is insufficient, you may be removed from game."
+                            required="required" title="">{{ form.cleaned_data.introduction }}</textarea></div>
                     <div class="form-group"><label class="control-label" for="id_picture">Picture URL:</label><input
                             class="form-control" id="id_picture" name="picture"
                             placeholder="Please put the URL of a picture of you. Try to crop it so you're the only one. INCLUDE HTTP://"
-                            required="required" title="" type="text"/></div>
+                            required="required" title="" type="text" value="{{ form.cleaned_data.picture }}"/></div>
                 </table>
                 <button class="btn btn-lg btn-primary btn-block" type="submit">Sign Up</button>
             </form>
