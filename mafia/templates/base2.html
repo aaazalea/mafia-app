@@ -1,0 +1,72 @@
+{% extends "basebase.html" %}
+{% load staticfiles %}
+{% load bootstrap3 %}
+{% bootstrap_css %}
+{% bootstrap_javascript %}
+
+{% block bootstrap3_extra_head %}
+    <meta http-equiv="refresh" content="180">
+    <link rel="shortcut icon" href="{% static 'mafia-icon.png' %}" type="image/png"/>
+{% endblock %}
+
+{% block bootstrap3_content %}
+    <nav class="navbar navbar-default">
+        <div class="container-fluid">
+            <!-- Brand and toggle get grouped for better mobile display -->
+            <div class="navbar-header">
+                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse"
+                        data-target="#bs-example-navbar-collapse-1">
+                    <span class="sr-only">Toggle navigation</span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                    <span class="icon-bar"></span>
+                </button>
+                <a class="navbar-brand" href="/">Home</a>
+            </div>
+
+            <!-- Collect the nav links, forms, and other content for toggling -->
+            <div class="collapse navbar-collapse" id="bs-example-navbar-collapse-1">
+                <ul class="nav navbar-nav">
+                    <li><a href="http://mafia.mit.edu">Forums</a></li>
+                    <li><a href="{% url "past_games" %}">List of Games</a></li>
+                </ul>
+                <ul class="nav navbar-nav navbar-right">
+                    {% if curent_game %}
+                        <li class="navbar-text">Day <b>{{ current_game.current_day }}</b> of
+                            <b>{{ current_game.name }}</b>
+                        </li>
+                        <li class="dropdown">
+                            <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
+                               aria-expanded="false">Current Game<span class="caret"></span></a>
+                            <ul class="dropdown-menu" role="menu">
+                                <li><a href="{% url "index" %}">Home</a></li>
+
+                                <li><a href="{{ current_game.rules_url }}" target="_blank">Rules</a></li>
+
+                                <li><a href="{% url "your_role" %}"> Your role information</a></li>
+                                <li><a href="{% url "accounts:logout" %}">Log out</a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="navbar-text">No Current Game</li>
+                        <li><a href="{% url 'accounts:login' %}">Log in</a></li>
+
+                    {% endif %}
+                </ul>
+            </div>
+            <!-- /.navbar-collapse -->
+        </div>
+        <!-- /.container-fluid -->
+    </nav>
+    <div class="container">
+        <h1>{% block title %}(no title){% endblock %}</h1>
+
+        {% bootstrap_messages %}
+
+
+        {% block main %} {% endblock %}
+    </div>
+{% endblock %}
+
+</body>
+</html>
