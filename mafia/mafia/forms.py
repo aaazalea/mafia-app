@@ -85,7 +85,7 @@ class MafiaPowerForm(forms.Form):
             if need:
                 self.fields['extra_field'] = need
             self.fields['power_id'] = forms.IntegerField(widget=forms.HiddenInput(), initial=power.id)
-            if power.power == MafiaPower.SET_A_TRAP or power.power == MafiaPower.SLAUGHTER_THE_WEAK:
+            if power.power in [MafiaPower.SET_A_TRAP, MafiaPower.SLAUGHTER_THE_WEAK, MafiaPower.CONSCRIPTION]:
                 self.fields['target'] = forms.ModelChoiceField(
                     queryset=Player.objects.filter(death=None, game__active=True))
 

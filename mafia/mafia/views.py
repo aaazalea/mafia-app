@@ -230,6 +230,8 @@ def investigation_form(request):
 def rogue_disarmed(request):
     p = Player.objects.get(user=request.user, game__active=True)
     p.role_information = p.game.current_day + ROGUE_KILL_WAIT
+    p.game.log(message="%s was disarmed by a mafia member." % p, users_who_can_see=[p], mafia_can_see=True)
+    p.save()
     return HttpResponseRedirect("/")
 
 
@@ -587,7 +589,9 @@ def ic_reveal(request):
 
 
 def old_logs(request, game_id):
-    game = Game.objects.get(id=game_id, archived=True)
+    game = Game.objects.get(id=game_id)
+    if not game.archived:
+        return HttpResponseRedirect("/")
     game_logs = [(log_item.get_text(game.god), log_item.time, log_item.is_day_start()) for log_item in
                  game.logitem_set.all()]
     game_logs.sort(key=lambda a: a[1])

@@ -47,7 +47,7 @@ class Game(models.Model):
     number_of_living_players = property(get_number_of_living_players)
 
     def increment_day(self):
-        if self.current_day == 0 and not self.active:
+        if not self.active and not self.archived:
             # start the game
             self.active = True
         else:
@@ -55,7 +55,7 @@ class Game(models.Model):
             if Death.objects.filter(murderer__game=self).exists():
                 lynches, choices = self.get_lynch(self.current_day)
                 for lynched in lynches:
-                    self.kill_day_end(lynched, "Lynch (day %d)" % self.current_day)
+                    self.kill_day_end(lynched, "Lynch (day %d)" % self.current_day, log_message=False)
                     self.log(anonymous_message="%s was lynched (end day %d)" % (lynched, self.current_day))
 
             # note that end-of-day deaths happen *after* lynches
@@ -73,9 +73,10 @@ class Game(models.Model):
         self.save()
 
 
-    def kill_day_end(self, player, why):
+    def kill_day_end(self, player, why, log_message=True):
         Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
-        self.log(anonymous_message="%s dies of %s (end day %d)" % (player, why, self.current_day))
+        if log_message:
+            self.log(anonymous_message="%s dies of %s (end day %d)" % (player, why, self.current_day))
 
         # redistribute items
         for item in player.item_set.all():
@@ -186,20 +187,22 @@ class Player(models.Model):
 
         :return: False if the rogue can kill now, otherwise the next kill day
         """
-        next_kill_day = self.role_information
-        if self.game.current_day >= next_kill_day:
+        first_kill_day = self.role_information
+        if self.game.current_day >= first_kill_day:
             if not self.kills.exists():
                 return False
             else:
                 most_recent_kill = self.kills.order_by('-when')[0]
                 last_kill_day = most_recent_kill.day
                 next_kill_day = last_kill_day + ROGUE_KILL_WAIT
-                if next_kill_day < self.game.current_day:
+                if next_kill_day > self.game.current_day:
                     return next_kill_day
                 else:
                     return False
-
+        else:
+            return first_kill_day
     next_rogue_kill_day = property(cant_rogue_kill)
+
 
     def additional_info(self):
         if self.role == Role.objects.get(name__iexact='gay knight'):
@@ -208,7 +211,7 @@ class Player(models.Model):
             else:
                 return "Your Gay Knight partner has not been assigned yet."
         elif self.role == Role.objects.get(name__iexact="rogue"):
-            if not self.next_rogue_kill_day:
+            if self.can_make_kills():
                 return "You are currently permitted to make kills."
             else:
                 return "You are next allowed to kill on <b> day %d</b>." % self.next_rogue_kill_day
@@ -303,7 +306,9 @@ class Player(models.Model):
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
             return True
         elif self.role == Role.objects.get(name__iexact='rogue'):
-            return not self.next_rogue_kill_day
+            if not self.cant_rogue_kill():
+                return True
+
         elif self.role == Role.objects.get(name__iexact='vigilante'):
             for kill in self.kills.all():
                 if not (kill.murderee.is_evil() or kill.murderee.role == Role.objects.get(name__iexact='Rogue')):
@@ -379,6 +384,9 @@ class Player(models.Model):
         links = [(reverse('forms:death'), "Report your death.")]
         if self.can_make_kills():
             links.append((reverse('forms:kill'), "Report a kill you made"))
+            if self.role == Role.objects.get(name="Rogue"):
+                links.append((reverse('rogue_disarmed'), "Report that you were disarmed"))
+
         if self.can_investigate():
             links.append((reverse('forms:investigation'), "Make an investigation"))
         if self.role == Role.objects.get(name="Desperado") and self.role_information == Player.DESPERADO_INACTIVE:
@@ -390,8 +398,6 @@ class Player(models.Model):
             links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
-        if self.role == Role.objects.get(name="Rogue"):
-            links.append((reverse('rogue_disarmed'), "Report that you were disarmed"))
         if self.role == Role.objects.get(name="Innocent Child"):
             links.append((reverse('forms:ic_reveal'), "Trust someone"))
         return links
