@@ -18,6 +18,7 @@ urlpatterns = patterns('',
                        url(r'^mafia-powers/$', 'mafia.views.mafia_powers', name='mafia_powers'),
                        url(r'^logs/$', 'mafia.views.logs', name='logs'),
                        url(r'^rogue-disarmed/$', 'mafia.views.rogue_disarmed', name='rogue_disarmed'),
+                       url(r'^message-seen/(?P<message>.*)$', 'mafia.views.message_seen', name='message_seen'),
 
                        url(r'^past-games/(?P<game_id>\d+)', 'mafia.views.old_logs', name='old_logs'),
                        url(r'^past-games/$', 'mafia.views.past_games', name='past_games'),

@@ -32,11 +32,20 @@ def notifier(function):
                     messages.error(request, message.content)
                 else:
                     messages.info(request, message.content)
-                message.seen = True
-                message.save()
         return function(request, *args, **kwargs)
 
     return new_func
+
+
+def message_seen(request, message):
+    try:
+        notification = Notification.objects.get(user=request.user, game__active=True, seen=False, content=message)
+        notification.seen = True
+        notification.save()
+        return HttpResponse("Notified")
+
+    except Notification.DoesNotExist:
+        return HttpResponse("Oops")
 
 
 @notifier
