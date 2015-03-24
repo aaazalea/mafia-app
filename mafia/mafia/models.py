@@ -7,6 +7,8 @@ from django.contrib.auth.models import User
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE
 from django.utils.datetime_safe import datetime
 
+NO_LYNCH = "No lynch"
+
 
 class Game(models.Model):
     god = models.ForeignKey(User)
@@ -96,7 +98,11 @@ class Game(models.Model):
                  list of tuples (lynchee, num votes)
         """
         # TODO tiebreaker logic
-        choices = []
+        no_lynch_votes = [p.lynch_vote_made(day) for p in self.living_players if
+                          p.lynch_vote_made(day) and not p.lynch_vote_made(day).lynchee]
+        choices = [(NO_LYNCH, no_lynch_votes, sum(v.value for v in no_lynch_votes))]
+        if not choices[0][2]:
+            choices = []
         for player in self.player_set.all():
             votes = player.lynch_votes_for(day)
             if votes:
@@ -104,7 +110,8 @@ class Game(models.Model):
         if choices:
             choices.sort(key=lambda c: -c[2])
             lynches = (choices[0][0],)
-
+            if lynches[0] == NO_LYNCH:
+                return [], choices
             return lynches, choices
         else:
             return [], []
@@ -573,16 +580,17 @@ class Investigation(models.Model):
 
 class LynchVote(models.Model):
     voter = models.ForeignKey(Player, related_name="lynch_votes_made")
-    lynchee = models.ForeignKey(Player, related_name="lynch_votes_received")
+    lynchee = models.ForeignKey(Player, related_name="lynch_votes_received", null=True)
     time_made = models.DateTimeField()
     day = models.IntegerField()
     value = models.IntegerField(default=1)
 
     def __str__(self):
+        lynchee = (self.lynchee if self.lynchee else NO_LYNCH)
         if self.value == 1:
-            return "%s (day %d)" % (self.lynchee, self.day)
+            return "%s (day %d)" % (lynchee, self.day)
         else:
-            return "%s x%d (day %d)" % (self.lynchee, self.value, self.day)
+            return "%s x%d (day %d)" % (lynchee, self.value, self.day)
 
 
 class Item(models.Model):

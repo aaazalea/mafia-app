@@ -21,15 +21,13 @@
                     <div class="form-group"><label class="control-label" for="id_password">Password: </label><input
                             class="form-control" id="id_password" maxlength="200" name="password"
                             placeholder="Make one up if you don't have an account on mafia-app.mit.edu yet"
-                            title="" type="password" value="
-                            {% if form.cleaned_data.password == form.cleaned_data.confirm_password %}{{ form.cleaned_data.password }}{% endif %}"/>
+                            title="" type="password" value="{% if form.cleaned_data.password == form.cleaned_data.confirm_password %}{{ form.cleaned_data.password }}{% endif %}"/>
                     </div>
                     <div class="form-group"><label class="control-label" for="id_confirm_password">Confirm
                         password: </label><input class="form-control" id="id_confirm_password" maxlength="200"
                                                  name="confirm_password" title=""
                                                  placeholder="(only if you don't have an account already)"
-                                                 type="password" value="
-                            {% if form.cleaned_data.password == form.cleaned_data.confirm_password %}{{ form.cleaned_data.password }}{% endif %}"/>
+                                                 type="password" value="{% if form.cleaned_data.password == form.cleaned_data.confirm_password %}{{ form.cleaned_data.password }}{% endif %}"/>
                     </div>
                     <div class="form-group"><label class="control-label" for="id_email">Email Address:</label><input
                             class="form-control" id="id_email" maxlength="50" name="email"

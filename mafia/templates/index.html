@@ -8,63 +8,63 @@
 
 {% block main %}
     {% if player %}
-    {% if player.investigation_set.all %}
+        {% if player.investigation_set.all %}
+            <p>
+            <table class="table table-bordered">
+                <tr>
+                    <th colspan="5">Your investigations</th>
+                </tr>
+                <tr>
+                    <th>Day</th>
+                    <th>Death</th>
+                    <th>Investigation Type</th>
+                    <th>Guess</th>
+                    <th>Result</th>
+                </tr>
+                {% for investigation in player.investigation_set.all %}
+                    <tr>
+                        <td>{{ investigation.day }}</td>
+                        <td>{{ investigation.death.murderee.username }}</td>
+                        <td>{{ investigation.type_name }}</td>
+                        <td>{{ investigation.guess.username }}</td>
+                        <td>{% if investigation.correct %}Guilty{% else %}Innocent{% endif %}
+
+                        </td>
+                    </tr>
+                {% endfor %}
+            </table>
+            </p>
+
+        {% endif %}
         <p>
         <table class="table table-bordered">
             <tr>
-            <th colspan="5">Your investigations</th>
+                <th colspan="3">Your Lynch Vote History</th>
             </tr>
             <tr>
                 <th>Day</th>
-                <th>Death</th>
-                <th>Investigation Type</th>
-                <th>Guess</th>
-                <th>Result</th>
+                <th>Your Vote</th>
+                <th>Lynch Result</th>
             </tr>
-            {% for investigation in player.investigation_set.all %}
-                <tr>
-                    <td>{{ investigation.day }}</td>
-                    <td>{{ investigation.death.murderee.username }}</td>
-                    <td>{{ investigation.type_name }}</td>
-                    <td>{{ investigation.guess.username }}</td>
-                    <td>{% if investigation.correct %}Guilty{% else %}Innocent{% endif %}
-
-                    </td>
-                </tr>
+            {% for day in player.game.current_day|get_xrange1 %}
+                {% if day != player.game.current_day or player.alive %}
+                    <tr>
+                        <td>{{ day }}</td>
+                        <td>{% if day != player.game.current_day %}{{ player|get_vote:day }}{% else %}{% if vote %}
+                            {% if vote.lynchee %}Today, you voted to lynch <b>{{ vote.lynchee }}</b>{% else %}Today, you
+                                voted for <b>no lynch</b> {% endif %} (<a href="{% url "forms:vote" %}">change</a>).
+                        {% else %}
+                            <a href="{% url 'forms:vote' %}">Click here to vote for a person to lynch.</a>
+                        {% endif %}
+                        {% endif %}</td>
+                        <td>{% if day != player.game.current_day %}<a href="{% url 'daily_lynch' day %}">
+                            {{ player.game|get_lynch:day }}</a>{% endif %}</td>
+                    </tr>
+                {% endif %}
             {% endfor %}
+
         </table>
         </p>
-
-    {% endif %}
-    <p>
-    <table class="table table-bordered">
-        <tr>
-            <th colspan="3">Your Lynch Vote History</th>
-        </tr>
-        <tr>
-            <th>Day</th>
-            <th>Your Vote</th>
-            <th>Lynch Result</th>
-        </tr>
-        {% for day in player.game.current_day|get_xrange1 %}
-            {% if day != player.game.current_day or player.alive %}
-            <tr>
-                <td>{{ day }}</td>
-                <td>{% if day != player.game.current_day %}{{ player|get_vote:day }}{% else %}            {% if vote %}
-                    Today, you voted to lynch <b>{{ vote.lynchee.username }}</b> (<a href="{% url "forms:vote" %}">change</a>
-                    ).
-                {% else %}
-                    <a href="{% url 'forms:vote' %}">Click here to vote for a person to lynch.</a>
-                {% endif %}
-                {% endif %}</td>
-                <td>{% if day != player.game.current_day %}<a href="{% url 'daily_lynch' day %}">
-                    {{ player.game|get_lynch:day }}</a>{% endif %}</td>
-            </tr>
-            {% endif %}
-        {% endfor %}
-
-    </table>
-    </p>
     {% else %}
         <p>
         <table class="table table-bordered">
@@ -93,9 +93,9 @@
 
     <p>
     <table class="table table-bordered">
-    <tr>
-        <th colspan="100%">Recent Deaths (<a href="{% url 'recent_deaths' %}">view all</a>)</th>
-    </tr>
+        <tr>
+            <th colspan="100%">Recent Deaths (<a href="{% url 'recent_deaths' %}">view all</a>)</th>
+        </tr>
         <tr>
             <th>Killed</th>
             <th>Where/How</th>
@@ -106,7 +106,7 @@
         </tr>
         {% for death in recent_deaths %}
             <tr class="{% if death.day == death.murderee.game.current_day %}danger{% endif %}">
-            <td>{{ death.murderee.user.username }}</td>
+                <td>{{ death.murderee.user.username }}</td>
                 <td>{{ death.where }}</td>
                 <td>{{ death.when|date:"M d, P" }} (Day {{ death.day }})</td>
                 {% if game.god == user %}

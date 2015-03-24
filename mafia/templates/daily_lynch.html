@@ -7,7 +7,7 @@
     <h2>{{ lynch_str }}</h2>
 
     {% for choice in choices %}
-        <p><h4>Votes for {{ choice.0.username }} ({{ choice.2 }}):</h4>
+        <p><h4>Votes for {{ choice.0 }} ({{ choice.2 }}):</h4>
         <ul>
             {% for vote in choice.1 %}
                 <li>{{ vote.voter.username }}{% if vote.value != 1 %} (x{{ vote.value }}){% endif %}</li>
