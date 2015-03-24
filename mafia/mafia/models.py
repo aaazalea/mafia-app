@@ -481,9 +481,10 @@ class Death(models.Model):
                                        mafia_can_see=self.murderer.is_evil(),
                                        users_who_can_see=[self.murderer, self.murderee])
 
-                if not self.kaboom and self.murderee.has_microphone():
+                microphones = Item.objects.filter(owner=self.murderee, type=Item.MICROPHONE)
+                if not self.kaboom:
                     # TODO Don
-                    for mic in Item.objects.filter(owner=self.murderee, type=Item.MICROPHONE):
+                    for mic in microphones:
                         number = mic.number
                         # TODO should mics transfer upon death?
                         mic.used = self.when
