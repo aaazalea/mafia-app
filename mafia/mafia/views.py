@@ -318,6 +318,33 @@ def lynch_vote(request):
         messages.add_message(request, messages.ERROR, "Dead people don't vote. :(")
         return HttpResponseRedirect("/")
 
+@notifier
+@login_required
+def items(request):
+    # TODO is_evil ?
+    game = Game.objects.get(active=True)
+    if request.user == game.god:
+        messages.add_message(request, messages.WARNING, "Sorry, this view has not been implemented for you. Check the game log instead.")
+        return HttpResponseRedirect("/")
+    player = Player.objects.get(user=request.user, game__active=True)
+    if player.is_alive():
+        return render(request, "items.html", {'player': player, 'game': game})
+    else:
+        messages.add_message(request, messages.WARNING, "You're dead, so you can't use items. Check the game log instead.")
+        return HttpResponseRedirect("/")
+
+@notifier
+@login_required
+def destroy_item(request, id):
+    current_item = Item.objects.get(id=id)
+    player = Player.objects.get(user=request.user, game__active=True)
+    if current_item.owner != player:
+        messages.add_message(request, messages.WARNING, "That item does not belong to you.")
+        return HttpResponseRedirect("/")
+    current_item.owner = None
+    player.game.log(message="%s has destroyed %s" %(player, current_item.get_name()), users_who_can_see=[player])
+    current_item.save()
+    return HttpResponseRedirect(reverse('items'))
 
 @notifier
 @login_required
@@ -469,11 +496,14 @@ def mafia_power_form(request):
         messages.add_message(request, messages.SUCCESS, message)
         return HttpResponseRedirect(reverse('mafia_powers'))
     else:
-        if player.is_evil:
+        if player.is_evil and player.is_alive:
             power = MafiaPower.objects.get(id=request.GET['power_id'])
             return render(request, "form.html",
                           {'form': form, 'player': player, "title": "Use a Mafia Power: %s" % power,
                            'url': reverse('forms:mafia_power')})
+        elif not player.is_alive:
+            messages.add_message(request, messages.WARNING, "You're dead, you can't do mafia things!")
+            return HttpResponseRedirect(reverse("mafia_powers"))
         else:
             messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
             return HttpResponseRedirect("/")
@@ -483,10 +513,11 @@ def mafia_power_form(request):
 @login_required
 def mafia_powers(request):
     game = Game.objects.get(active=True)
-    if request.user == game.god:
+    if not request.user == game.god:
+        player = Player.objects.get(user=request.user, game__active=True)
+    if request.user == game.god or not player.is_alive():
         return render(request, "mafia_powers.html", {'user': request.user, 'game': game, 'usable': False})
-    player = Player.objects.get(user=request.user, game__active=True)
-    if player.is_evil() or not player.is_alive:
+    elif player.is_evil():
         return render(request, "mafia_powers.html", {'player': player, 'game': game, 'usable': True})
     else:
         messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")

@@ -388,7 +388,7 @@ class Player(models.Model):
     username = property(get_username)
 
     def get_links(self):
-        links = [(reverse('forms:death'), "Report your death.")]
+        links = [(reverse('items'), "Manage your items"), (reverse('forms:death'), "Report your death.")]
         if self.can_make_kills():
             links.append((reverse('forms:kill'), "Report a kill you made"))
             if self.role == Role.objects.get(name="Rogue"):
@@ -481,21 +481,45 @@ class Death(models.Model):
                                        mafia_can_see=self.murderer.is_evil(),
                                        users_who_can_see=[self.murderer, self.murderee])
 
-                microphones = Item.objects.filter(owner=self.murderee, type=Item.MICROPHONE)
-                if not self.kaboom:
+                microphones = Item.objects.filter(owner=self.murderee, type=Item.MICROPHONE, used__isnull=True)
+                if self.kaboom:
+                    for item in self.murderee.item_set.all():
+                        #Discard items
+                        item.owner = None
+                        item.save()
+                        self.murderee.game.log(message="%s, which %s was holding, was destroyed by KABOOM!" %
+                                       (item.get_name(), self.murderee), users_who_can_see=[self.murderee])
+                else:
                     # TODO Don
                     for mic in microphones:
                         number = mic.number
                         # TODO should mics transfer upon death?
                         mic.used = self.when
+                        mic.result = "This microphone has been set off."
+                        mic.save()
                         if Item.objects.filter(type=Item.RECEIVER, number=number, owner__isnull=False).exists():
                             receiver = Item.objects.get(type=Item.RECEIVER, number=number)
-                            Game.log(message="%s has heard from Receiver %d that %s killed %s." % (
-                                receiver.owner, number, self.murderee, self.murderer),
+                            self.murderee.game.log(message="%s has heard from Receiver %d that %s killed %s." % (
+                                receiver.owner, number, self.murderer, self.murderee),
                                      users_who_can_see=[receiver.owner])
                             receiver.owner.notify("You hear something from Receiver %d! %s killed %s!" % (
                             number, self.murderer, self.murderee))
                             receiver.used = self.when
+                            receiver.target = self.murderee
+                            receiver.result = "%s killed %s!" % (self.murderer, self.murderee)
+                            receiver.save()
+                    #Transfer items to killer
+                    for item in self.murderee.item_set.all():
+                        #Discard item if used
+                        if item.used:
+                            item.owner = None
+                            item.save()
+                        else:
+                            item.owner = self.murderer
+                            self.murderee.game.log(message="%s transferred from %s to %s upon kill" %
+                                           (item.get_name(), self.murderee, self.murderer), users_who_can_see=[self.murderer, self.murderee])
+                            self.murderer.notify("Upon killing %s, you received their %s" %(self.murderee, item.get_name()), bad=False)
+                            item.save()
 
         super(Death, self).save(*args, **kwargs)
 
@@ -610,11 +634,12 @@ class Item(models.Model):
     )
 
     game = models.ForeignKey(Game)
-    owner = models.ForeignKey(Player, null=True)
+    owner = models.ForeignKey(Player, null=True, blank=True)
     number = models.IntegerField()
     type = models.CharField(max_length=2, choices=ITEM_TYPE)
-    used = models.DateTimeField(null=True)
-    target = models.ForeignKey(Player, null=True, related_name="items_targeted_by")
+    used = models.DateTimeField(null=True, blank=True)
+    target = models.ForeignKey(Player, null=True, related_name="items_targeted_by", blank=True)
+    result = models.TextField(null=True, blank=True)
 
     def get_password(self):
         if not hasattr(self, "secret"):
@@ -637,23 +662,30 @@ class Item(models.Model):
                 return "%s %d (%s)" % (b, self.number, self.game.name)
         return "????? (Item)"
 
+    def can_use_via_form(self):
+        return self.type == Item.SHOVEL or self.type == Item.MEDKIT or self.type == Item.TASER
+
     def use(self, target=None):
         if self.type == Item.SHOVEL and not target.is_alive():
-            text = target.death.get_shovel_text()
-            Game.log(message="%s shoveled %s and got a result of %s." % (self.owner, target, text),
+            self.result = target.death.get_shovel_text()
+            self.game.log(message="%s shoveled %s with Shovel %d and got a result of %s." % (self.owner, target, self.number, self.result),
                      users_who_can_see=[self.owner])
-            self.used = datetime()
+            self.used = datetime.now()
             self.target = target
+            self.save()
             return text
-        if self.type == Item.MEDKIT:
-            Game.log(message="%s activated a medkit." % (self.owner), users_who_can_see=[self.owner])
-            self.used = datetime()
-        return None
-        if self.type == Item.TASER:
-            Game.log(message="%s tased %s." % (self.owner), users_who_can_see=[self.owner, self.target])
-            self.used = datetime()
+        elif self.type == Item.MEDKIT:
+            self.game.log(message="%s activated Medkit %d." % (self.owner, self.number), users_who_can_see=[self.owner])
+            self.used = datetime.now()
+            self.save()
+            return None
+        elif self.type == Item.TASER:
+            # TODO Make taser actually prevent killing
+            self.game.log(message="%s tased %s with Taser %d." % (self.owner, self.number), users_who_can_see=[self.owner, self.target])
+            self.used = datetime.now()
             self.target = target()
-        return None
+            self.save()
+            return None
 
 
 class MafiaPower(models.Model):
