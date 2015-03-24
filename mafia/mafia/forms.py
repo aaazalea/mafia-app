@@ -55,7 +55,9 @@ class InvestigationForm(forms.Form):
 class LynchVoteForm(forms.Form):
     vote = PlayerModelChoiceField(
         queryset=Player.objects.filter(game__active=True, death=None),
-        label="Whom do you want to lynch?"
+        label="Whom do you want to lynch?",
+        empty_label="No Lynch",
+        required=not NO_LYNCH_ALLOWED
     )
 
 

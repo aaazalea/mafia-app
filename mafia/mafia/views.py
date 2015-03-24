@@ -294,10 +294,13 @@ def lynch_vote(request):
         if request.method == "POST":
             form = LynchVoteForm(request.POST)
             if form.is_valid():
-                vote_value = Player.objects.get(id=form.data["vote"])
+                vote_value = Player.objects.get(id=form.data["vote"]) if form.data["vote"] else None
                 vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=datetime.now(),
                                                 day=game.current_day)
-                vote_message = "%s voted to lynch %s" % (player, vote_value)
+                if vote_value:
+                    vote_message = "%s voted to lynch %s" % (player, vote_value)
+                else:
+                    vote_message = "%s voted for no lynch" % player
                 if player.elected_roles.filter(name="Mayor").exists():
                     vote.value = 3
                     vote.save()

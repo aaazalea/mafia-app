@@ -1,4 +1,5 @@
 from django import template
+from mafia.models import NO_LYNCH
 
 
 register = template.Library()
@@ -9,7 +10,10 @@ def get_vote(value, arg):
     """Gets the vote made by a given player on a given day"""
     vote = value.lynch_vote_made(arg)
     if vote:
-        return vote.lynchee.username
+        if vote.lynchee:
+            return vote.lynchee
+        else:
+            return NO_LYNCH
     else:
         return "n/a"
 
@@ -18,7 +22,7 @@ def get_vote(value, arg):
 def get_lynch(value, arg):
     choices = value.get_lynch(arg)[0]
     if choices:
-        return ", ".join(a.username for a in choices)
+        return ", ".join(a for a in choices)
     else:
         return "No lynch"
 
