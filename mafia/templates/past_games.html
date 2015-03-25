@@ -7,6 +7,7 @@
         <tr>
             <th>Game</th>
             <th>God</th>
+            <th>Rules</th>
         </tr>
         {% for game in games %}
             <tr>
@@ -17,6 +18,7 @@
                     {{ game.name }}{% if game.active %} (current game){% endif %}</a>
                 </td>
                 <td>{{ game.god }}</td>
+                <td><a href="{{ game.rules_url }}">Rules</a></td>
             </tr>
         {% endfor %}
     </table>

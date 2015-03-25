@@ -4,7 +4,8 @@ from django import forms
 from django.core.urlresolvers import reverse
 from django.db import models
 from django.contrib.auth.models import User
-from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE
+from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
+    MAYOR_COUNT_MAFIA_TIMES
 from django.utils.datetime_safe import datetime
 
 NO_LYNCH = "No lynch"
@@ -17,6 +18,7 @@ class Game(models.Model):
     name = models.CharField(max_length=30)
     current_day = models.IntegerField(default=0)
     rules_url = models.URLField()
+    mafia_counts = models.IntegerField(default=0)
 
     def log(self, message=None, anonymous_message=None, mafia_can_see=False, users_who_can_see=[]):
         if not message:
@@ -132,7 +134,6 @@ class Role(models.Model):
 class ElectedRole(models.Model):
     name = models.CharField(max_length=20)
     description = models.TextField(blank=True)
-
     def __str__(self):
         return self.name
 
@@ -151,21 +152,17 @@ class Player(models.Model):
     # - Mafia
     # - Investigator
     # - Vigilante
+    # - Superhero
 
-    SUPERHERO_IDENTITY = 1
-    SECRET_IDENTITY = 0
     DESPERADO_INACTIVE = -1
     DESPERADO_ACTIVATING = 0
     # Rogue: first kill day
-    # Superhero: 0==secret identity, 1==superhero identity
     # Desperado: number of days since going desperado
     # Gay knight: id of partner (perhaps not since this is implemented separately)
-    # TODO implement Vampire (not doing this yet because very likely to change -jakob)
     role_information = models.IntegerField(null=True, blank=True)
 
     class Meta:
         unique_together = (('game', 'user'),)
-
 
     def __str__(self):
         return self.username
@@ -176,6 +173,47 @@ class Player(models.Model):
         return True
 
     alive = property(is_alive)
+
+    def get_extra_info_for_dead_people(self):
+        if not self.is_alive():
+            return "Dead"
+        if self.role == Role.objects.get(name__iexact="Gay Knight"):
+            return "Partner is %s" % self.gn_partner
+        elif self.role == Role.objects.get(name__iexact="Rogue"):
+            if not self.cant_rogue_kill():
+                return "Can kill"
+            return "Next kill: day %d" % self.next_rogue_kill_day
+        elif self.role == Role.objects.get(name__iexact="desperado"):
+            if self.role_information == Player.DESPERADO_ACTIVATING:
+                return "Activating tonight"
+            elif self.role_information == Player.DESPERADO_INACTIVE:
+                return "Inactive desperado"
+            else:
+                return "Went desperado %d days ago" % self.role_information
+        elif self.role == Role.objects.get(name__iexact="vigilante"):
+            if self.can_make_kills():
+                return "Can kill"
+            else:
+                return "Used up kill"
+        elif self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
+            list1 = ", ".join(self.conspiracylist_set.get_or_create(day=self.game.current_day)[0].conspired.all())
+            if list1:
+                return "Conspiracy list: %s" % list1
+            else:
+                return "No conspiracy list"
+        elif self.role == Role.objects.get(name="Superhero"):
+            superhero_day = SuperheroDay.objects.get(owner=self, day=self.game.current_day)
+            if superhero_day.superhero_identity:
+                return "Superhero identity (paranoia: %s)" % superhero_day.paranoia
+            else:
+                return "Secret identity"
+        else:
+            # IC, Investigator
+            return ""
+        # TODO superhero
+        # TODO mafia don
+
+
 
     def get_gn_partner(self):
         a = GayKnightPair.objects.filter(player1=self)
@@ -247,7 +285,17 @@ class Player(models.Model):
             return '<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
                    '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
                        tablify(today), tablify(tomorrow))
-
+        elif self.role == Role.objects.get(name="Superhero"):
+            superhero_day = SuperheroDay.objects.get(owner=self, day=self.game.current_day)
+            sup_yesterday = SuperheroDay.objects.get(owner=self, day=self.game.current_day - 1)
+            if sup_yesterday.paranoia_successful():
+                a = "Immune today by paranoia. "
+            else:
+                a = ""
+            if superhero_day.superhero_identity:
+                return a + "Today: superhero identity (paranoia: %s)." % superhero_day.paranoia
+            else:
+                return a + "Today: secret identity."
         else:
             return ""
 
@@ -265,13 +313,13 @@ class Player(models.Model):
                                                 investigation_type=Investigation.MAYORAL).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='investigator') and (
-                        kind is None or kind == Investigation.INVESTIGATOR):
+                kind is None or kind == Investigation.INVESTIGATOR):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.INVESTIGATOR).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='superhero') and (
-                        kind is None or kind == Investigation.SUPERHERO):
+                kind is None or kind == Investigation.SUPERHERO):
             # TODO implement secret identity / superhero identity
             # return not Investigation.exists(day=self.game.current_day-1,
             # investigator=self,investigation_type=Investigation.SH)
@@ -280,20 +328,19 @@ class Player(models.Model):
                                                 investigation_type=Investigation.SUPERHERO).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='Gay knight') and (
-                        kind is None or kind == Investigation.GAY_KNIGHT):
-            # TODO check rules about gay knights - I think it's not actually one investigation per day
+                kind is None or kind == Investigation.GAY_KNIGHT) and \
+                (death is None or Death.murderee == self.gn_partner):
             if not len(Investigation.objects.filter(investigator=self,
                                                     day=self.game.current_day,
                                                     investigation_type=Investigation.GAY_KNIGHT)) >= \
                     GAY_KNIGHT_INVESTIGATIONS:
-                if not self.gn_partner.alive and self.gn_partner.death.murderee == self.gn_partner:
+                if not self.gn_partner.alive and death.murderee == self.gn_partner:
                     return True
         if self.role == Role.objects.get(name__iexact='Desperado') and (
-                        kind is None or kind == Investigation.DESPERADO):
+                kind is None or kind == Investigation.DESPERADO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
-
                 if self.role_information > Player.DESPERADO_ACTIVATING:
                     return True
         # TODO implement police officer
@@ -303,8 +350,6 @@ class Player(models.Model):
         if self.role_information is None:
             if self.role == Role.objects.get(name__iexact='rogue'):
                 self.role_information = random.randint(1, ROGUE_KILL_WAIT + 1)
-            if self.role == Role.objects.get(name__iexact='Superhero'):
-                self.role_information = Player.SUPERHERO_IDENTITY
             if self.role == Role.objects.get(name__iexact='Desperado'):
                 self.role_information = Player.DESPERADO_INACTIVE
         super(Player, self).save(*args, **kwargs)
@@ -375,6 +420,9 @@ class Player(models.Model):
         elif self.role == Role.objects.get(name__iexact="Gay knight"):
             if not self.gn_partner.alive:
                 self.notify("Your gay knight partner died yesterday. You MUST attempt to avenge them!")
+        elif self.role == Role.objects.get(name="Superhero"):
+            if not SuperheroDay.objects.filter(owner=self, day=self.game.current_day + 1):
+                SuperheroDay.objects.create(owner=self, day=self.game.current_day + 1, secret_identity=True)
         poisons = MafiaPower.objects.filter(power=MafiaPower.POISON, target=self)
         if poisons.exists():
             poison = poisons[0]
@@ -396,17 +444,21 @@ class Player(models.Model):
 
         if self.can_investigate():
             links.append((reverse('forms:investigation'), "Make an investigation"))
-        if self.role == Role.objects.get(name="Desperado") and self.role_information == Player.DESPERADO_INACTIVE:
-            links.append((
-                "javascript:if(confirm('Are you sure you want to go desperado?')"
-                "==true){window.location.href='%s'}" % reverse(
-                    'go_desperado'), "Go desperado"))
+        if self.role == Role.objects.get(name="Desperado"):
+            if self.role_information == Player.DESPERADO_INACTIVE:
+                links.append((reverse('go_desperado'), "Go desperado"))
+            elif self.role_information == Player.DESPERADO_ACTIVATING:
+                links.append((reverse('undo_desperado'), "Cancel going desperado"))
         if self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
             links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
         if self.role == Role.objects.get(name="Innocent Child"):
             links.append((reverse('forms:ic_reveal'), "Trust someone"))
+        elif self.role == Role.objects.get(name="Superhero"):
+            links.append((reverse('forms:superhero'), "Choose identity"))
+        if self.elected_roles.filter(name="Mayor").exists() and self.game.mafia_counts < MAYOR_COUNT_MAFIA_TIMES:
+            links.append((reverse('count_the_mafia', "Count the Mafia")))
         return links
 
     def get_unread_notifications(self):
@@ -488,7 +540,7 @@ class Death(models.Model):
                         item.owner = None
                         item.save()
                         self.murderee.game.log(message="%s, which %s was holding, was destroyed by KABOOM!" %
-                                       (item.get_name(), self.murderee), users_who_can_see=[self.murderee])
+                                               (item.get_name(), self.murderee), users_who_can_see=[self.murderee])
                 else:
                     # TODO Don
                     for mic in microphones:
@@ -517,7 +569,7 @@ class Death(models.Model):
                         else:
                             item.owner = self.murderer
                             self.murderee.game.log(message="%s transferred from %s to %s upon kill" %
-                                           (item.get_name(), self.murderee, self.murderer), users_who_can_see=[self.murderer, self.murderee])
+                                                   (item.get_name(), self.murderee, self.murderer), users_who_can_see=[self.murderer, self.murderee])
                             self.murderer.notify("Upon killing %s, you received their %s" %(self.murderee, item.get_name()), bad=False)
                             item.save()
 
@@ -534,7 +586,7 @@ class Death(models.Model):
     def is_investigable(self, investigation_type):
         if investigation_type == Investigation.GAY_KNIGHT:
             return True
-        elif MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
+        elif (not CLUES_IN_USE) and MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
             return False
         return True
 
@@ -590,7 +642,8 @@ class Investigation(models.Model):
 
             if self.investigation_type != Investigation.GAY_KNIGHT:
                 if MafiaPower.objects.filter(target=self.guess, other_info=self.death.murderee.id,
-                                             game=self.death.murderee.game).exists():
+                                             game=self.death.murderee.game,
+                                             power=MafiaPower.FRAME_A_TOWNSPERSON).exists():
                     self.result = True
         return self.result
 
@@ -867,3 +920,26 @@ class Notification(models.Model):
     content = models.CharField(max_length=75)
     game = models.ForeignKey(Game)
     is_bad = models.BooleanField(default=True)
+
+
+class SuperheroDay(models.Model):
+    owner = models.ForeignKey(Player)
+    secret_identity = models.BooleanField(default=True)
+    day = models.IntegerField(null=True)
+    paranoia = models.ForeignKey(Player, related_name='paranoid_superhero_days')
+
+    superhero_identity = property(lambda self: not self.secret_identity)
+
+    def paranoia_successful(self):
+        """
+
+        :return: whether this superhero's paranoia worked yesterday
+        """
+        return self.paranoia and self.paranoia.death and self.paranoia.death.day == day
+
+    def __str__(self):
+        if self.superhero_identity:
+            return "%s's superhero identity (day %d)" % (self.owner, self.day)
+        else:
+            return "%s's secret identity (day %d)" % (self.owner, self.day)
+

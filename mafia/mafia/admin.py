@@ -64,7 +64,7 @@ class GameAdmin(admin.ModelAdmin):
     pair_gay_knights.short_description = "Pair up gay knights"
 
     list_display = ('name', 'active', 'number_of_players', 'number_of_living_players')
-    exclude = ('active', 'archived', 'current_day')
+    exclude = ('active', 'archived', 'current_day', 'mafia_counts')
     inlines = (PlayerInline, MafiaPowerInline)
     actions = [advance_day, archive_games, pair_gay_knights]
 

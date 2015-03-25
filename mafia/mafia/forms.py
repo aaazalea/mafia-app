@@ -18,7 +18,7 @@ class DeathReportForm(forms.Form):
     kaboom = forms.BooleanField(
         initial=False, required=False,
         label="Was a kaboom used?")
-    when = forms.IntegerField(label="How many minutes ago were you killed?")
+    when = forms.IntegerField(label="How many minutes ago were you killed?", min_value=0)
     where = forms.CharField(label='Where were you killed?')
 
 
@@ -28,7 +28,7 @@ class KillReportForm(forms.Form):
         label='Who did you kill?')
     kaboom = forms.BooleanField(initial=False, required=False,
                                 label="Was a kaboom used?")
-    when = forms.IntegerField(label="How many minutes ago did this happen?")
+    when = forms.IntegerField(label="How many minutes ago did this happen?", min_value=0)
 
     where = forms.CharField(label='Where did this happen?')
 
@@ -152,3 +152,11 @@ class ConspiracyListForm(forms.Form):
 class InnocentChildRevealForm(forms.Form):
     players_revealed_to = ModelMultipleChoiceField(Player.objects.filter(game__active=True, death=None),
                                                    label="Reveal to whom?")
+
+
+class SuperheroForm(forms.Form):
+    superhero_identity = forms.BooleanField(label="Will you be in superhero identity tomorrow?")
+    paranoia = forms.ModelChoiceField(Player.objects.filter(death__isnull=True),
+                                      label="Please choose a person for paranoia tomorrow "
+                                            "(if you are going to be in secret identity, this will be ignored)",
+                                      empty_label=None)

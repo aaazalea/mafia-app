@@ -2,6 +2,7 @@ from django.conf.urls import patterns, url
 
 urlpatterns = patterns('',
                        url(r'^death-report/$', 'mafia.views.death_report', name='death'),
+                       url(r'^superhero/$', 'mafia.views.superhero_form', name='superhero'),
                        url(r'^kill-report/$', 'mafia.views.kill_report', name='kill'),
                        url(r'^investigation/$', 'mafia.views.investigation_form', name='investigation'),
                        url(r'^lynch-vote/$', 'mafia.views.lynch_vote', name='vote'),

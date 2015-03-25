@@ -18,11 +18,13 @@
                 <td>{{ p.username }}{% if not p.is_alive %} (dead){% endif %}</td>
                 <td width="50%">{{ p.introduction }}</td>
                 <td>
-                    <div style="height: 150px; width: 150px;"><img src="{{ p.photo }}"
-                                                                   style="max-width: 100%;max-height: 100%"></div>
+                    <div style="height: 150px; width: 150px;"><img src="{{ p.photo }}" style="max-width: 100%;max-height: 100%"></div>
                 </td>
-                {% if game.god == user %}
+                {% if user == game.god or not player.is_alive %}
                     <td>{{ p.role.name }}{% if p.conscripted %} (conscripted){% endif %}</td>
+                    <td>{{ p.get_extra_info_for_dead_people }}</td>
+                {% endif %}
+                {% if user == game.god %}
                     <td>{% if p.alive %}<a href="{% url 'evict_player' p.id %}" class="btn btn-default">Evict</a>
                         {% else %}<a href="{% url 'resurrect_player' p.id %}" class="btn btn-default">Resurrect</a>
                     {% endif %}</td>

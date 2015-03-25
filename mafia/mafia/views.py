@@ -16,10 +16,11 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm
 from django.shortcuts import render
-from settings import ROGUE_KILL_WAIT
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification
+from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
+    SuperheroDay
 from django.core.urlresolvers import reverse
 
 
@@ -56,8 +57,12 @@ def index(request):
     try:
         game = Game.objects.get(active=True)
     except Game.DoesNotExist:
-        logout(request)
-        return HttpResponseRedirect("/accounts/login")
+        try:  # try again
+            game = Game.objects.get(god=request.user, archived=False)
+            return HttpResponseRedirect(reverse('forms:configure_game'))
+        except Game.DoesNotExist:
+            logout(request)
+            return HttpResponseRedirect("/accounts/login")
 
     if game.current_day == 0:
         messages.info(request,
@@ -112,6 +117,53 @@ def death_report(request):
     else:
         return render(request, 'form.html', {'form': form, 'player': me, 'title': 'Report your own death',
                                              'url': reverse('forms:death')})
+
+
+@notifier
+@login_required
+@user_passes_test(
+    lambda user: user.is_authenticated() and Player.objects.filter(user=user, role__name__iexact="superhero",
+                                                                   game__active=True).exists(),
+    login_url='/')
+def superhero_form(request):
+    me = Player.objects.get(user=request.user, game__active=True)
+    if request.POST:
+        form = SuperheroForm(request.POST)
+    else:
+        today = me.game.current_day
+        today_day = me.superheroday_set.get(day=today)
+        form = SuperheroForm(initial={'superhero_identity': today_day.superhero_identity,
+                                      'paranoia': today_day.paranoia or me})
+    if form.is_valid():
+        superhero_identity = 'superhero_identity' in form.data
+        paranoia = Player.objects.get(id=form.data['paranoia'])
+        today = me.game.current_day
+        if me.superheroday_set.filter(day=today + 1).exists():
+            tomorrow_day = me.superheroday_set.get(day=today + 1)
+            tomorrow_day.secret_identity = not superhero_identity
+            if superhero_identity:
+                tomorrow_day.paranoia = paranoia
+            else:
+                tomorrow_day.paranoia = None
+            tomorrow_day.save()
+        else:
+            s = not superhero_identity
+            if superhero_identity:
+                p = paranoia
+            else:
+                p = None
+            SuperheroDay.objects.create(day=today + 1, paranoia=p, secret_identity=s, owner=me)
+        if superhero_identity:
+            me.game.log("%s has set superhero identity for day %d, with paranoia target %s." % (me, today + 1, paranoia), users_who_can_see=[me])
+        else:
+            me.game.log("%s has set secret identity for day %d" % (me, today + 1), users_who_can_see=[me])
+
+        messages.success(request, "Set superhero settings for day %d successfully" % (today + 1))
+        return HttpResponseRedirect('/')
+    else:
+        return render(request, 'form.html', {'form': form, 'player': me, 'title': 'Superhero Form',
+                                             'url': reverse('forms:superhero')})
+
 
 
 @notifier
@@ -364,6 +416,22 @@ def item(request, item_id, password):
         # using the item
         return HttpResponse("Using items is not yet implemented.")
 
+@notifier
+@login_required
+def count_the_mafia(request):
+    if Game.get(active=True).mafia_counts == MAYOR_COUNT_MAFIA_TIMES:
+        messages.warning(request, "All mafia counts have been used.")
+    try:
+        player = Player.objects.get(user=request.user, game__active=True)
+        if player.elected_roles.filter(name="Mayor").exists():
+            mafia_count = sum(p.is_evil() for p in player.game.living_players)
+            messages.info(request, "There are <b>%d</b> mafia remaining." % mafia_count)
+            player.game.log("Mayor %s has counted the mafia and found that %d remain." % (player, mafia_count))
+            player.game.mafia_counts += 1
+            player.game.save()
+    except Player.DoesNotExist:
+        pass
+    return HttpResponseRedirect("/")
 
 @sensitive_post_parameters()
 @csrf_protect
@@ -414,6 +482,16 @@ def go_desperado(request):
     if player.role_information == Player.DESPERADO_INACTIVE:
         player.role_information = Player.DESPERADO_ACTIVATING
         player.game.log("%s  is going desperado tonight." % player, users_who_can_see=[player])
+        player.save()
+    return HttpResponseRedirect("/")
+
+@notifier
+@login_required
+def undo_desperado(request):
+    player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
+    if player.role_information == Player.DESPERADO_ACTIVATING:
+        player.role_information = Player.DESPERADO_INACTIVE
+        player.game.log("%s is no longer going desperado tonight." % player, users_who_can_see=[player])
         player.save()
     return HttpResponseRedirect("/")
 
@@ -533,6 +611,8 @@ def end_game(request):
         game.archived = True
         game.save()
         messages.info(request, "Game ended successfully")
+        for player in game.player_set:
+            player.notify("Game has ended - check forums to see who won.", bad=False)
     return HttpResponseRedirect("/")
 
 
@@ -665,3 +745,14 @@ def past_games(request):
     games = Game.objects.all()
     return render(request, "past_games.html",
                   {'games': games, 'current_game': current_game, 'next_game': next_game})
+
+@login_required
+def configure_game(request):
+    try:
+        game = Game.objects.get(active=False, archived=False, god=request.user)
+    except Game.DoesNotExist:
+        messages.error(request, "You may not configure a game at this time.")
+        return HttpResponseRedirect("/")
+
+    return HttpResponse("Not implemented yet")
+

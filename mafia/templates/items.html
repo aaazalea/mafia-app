@@ -15,12 +15,11 @@
                 <td>
                     {% if i.used %}
                         {{ i.result }}
-                        <!--a href="{% url 'forms:mafia_power' %}?power_id={{ p.id }}">{{ p.get_power_name }}</a-->
                     {% elif i.can_use_via_form %}
                         {{ "Dropdown form and/or activation button goes here" }}
                     {% endif %}
                 </td>
-                <!--TODO make destruction and execution work-->
+                {# TODO make destruction and execution work #}
                 {% if player.is_evil %}<td><a href="{% url 'destroy_item' i.id %}" class="btn btn-default">Destroy</a></td>{% endif %}
             </tr>
         {% endfor %}

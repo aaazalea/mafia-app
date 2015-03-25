@@ -133,7 +133,9 @@
         <!-- /.container-fluid -->
     </nav>
     <div class="container">
-        <h1>{% block title %}(no title){% endblock %}</h1>
+        <div class="page-header">
+            <h1>{% block title %}(no title){% endblock %}<small>{% block subtitle %}{% endblock %}</small></h1>
+        </div>
 
         {% bootstrap_messages %}
 

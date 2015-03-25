@@ -29,15 +29,6 @@
     {
         "fields": {
             "evil_by_default": false,
-            "name": "Vampire",
-            "description": "At the start of game, each vampire will be told three roles (chosen at random from the 8 town roles) that they find tasty. In addition, all vampires find mafia (including conscripts) and rogues tasty. \r\nBefore the start of each day, the Vampire can designate any number of people they wish to drink a pint of blood from that night.  A vampire may never designate the same player a second time. Each person only has two pints of blood. If a person doesn\u2019t have enough blood left for all of the vampires drinking their blood, the vampires drink in a random order until the person runs out of blood.\r\n\r\nDrinking a player\u2019s blood does not affect them at all, and a player does not know if a vampire drinks his blood. At the start of each day, each vampire finds out who he drank blood from successfully, and whether or not it was tasty. If a vampire ever drinks blood that wasn\u2019t tasty to them, they die. Additionally, if they die this way, the mafia gains a use of kaboom.\r\n\r\nIf a vampire drank blood from zero people on the previous night, then if the mafia kill them on the following day, the mafia get a use of kaboom. If a vampire drank blood from one person on the previous night, they get no bonus or penalty. If a vampire drank blood from two people or more people on the previous night, then if anyone tries to use \u201cBANG\u201d on them, they may respond with \u201cI do not die\u201d (You have 10 seconds to say this)."
-        },
-        "model": "mafia.role",
-        "pk": 4
-    },
-    {
-        "fields": {
-            "evil_by_default": false,
             "name": "Superhero",
             "description": "The superhero has two forms: Superhero Identity and Secret Identity. Before the start of each day, the superhero can tell god which identity he wants to be on the following day. God use a default of Secret Identity unless told otherwise.\r\n\r\nSecret Identity:\r\nWhile in secret identity, the superhero may visit murder sites and study clues, as if they were an investigator. The superhero may NOT make investigations. Additionally, if the superhero\u2019s paranoia has activated, they may respond to all \u201cBANG\u201d attempts on the following day with \u201cI do not die\u201d (You have 10 seconds to say this). The superhero can only get his paranoia to activate while in his superhero identiy.\r\n\r\nSuperhero Identity:\r\nWhile in superhero identity, the superhero may make investigations as if they were an investigator. The superhero may NOT study clues at murder sites. Additionally, before each day, the superhero may make a one-person \u201cparanoia list\u201d (God will assume it stays the same unless told otherwise). If that player dies, then the superhero\u2019s paranoia activates for the following day. The superhero does not gain an advantage from this unless he chooses his secret identity on the following day.\r\n"
         },
