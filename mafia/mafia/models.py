@@ -322,6 +322,10 @@ class Player(models.Model):
 
     investigations = property(get_investigations)
 
+    def has_clues_to_investigate(self, target):
+        # TODO implement clues
+        return True
+
     def can_investigate(self, kind=None, death=None):
         if self.elected_roles.filter(name__iexact='mayor').exists() and (kind is None or kind == Investigation.MAYORAL):
             if not Investigation.objects.filter(investigator=self,
@@ -329,22 +333,20 @@ class Player(models.Model):
                                                 investigation_type=Investigation.MAYORAL).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='investigator') and (
-                        kind is None or kind == Investigation.INVESTIGATOR):
+                kind is None or kind == Investigation.INVESTIGATOR):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.INVESTIGATOR).exists():
-                return True
+                return (not death) or self.has_clues_to_investigate(death.murderee)
         if self.role == Role.objects.get(name__iexact='superhero') and (
-                        kind is None or kind == Investigation.SUPERHERO):
-            # TODO implement secret identity / superhero identity
-            # return not Investigation.exists(day=self.game.current_day-1,
-            # investigator=self,investigation_type=Investigation.SH)
+                kind is None or kind == Investigation.SUPERHERO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.SUPERHERO).exists():
-                return True
+                return self.superheroday_set.get(day=self.game.current_day).superhero_identity and (
+                    (not death) or self.has_clues_to_investigate(death.murderee))
         if self.role == Role.objects.get(name__iexact='Gay knight') and (
-                        kind is None or kind == Investigation.GAY_KNIGHT) and \
+                kind is None or kind == Investigation.GAY_KNIGHT) and \
                 (death is None or Death.murderee == self.gn_partner):
             if not len(Investigation.objects.filter(investigator=self,
                                                     day=self.game.current_day,
@@ -353,13 +355,18 @@ class Player(models.Model):
                 if not self.gn_partner.alive and death.murderee == self.gn_partner:
                     return True
         if self.role == Role.objects.get(name__iexact='Desperado') and (
-                        kind is None or kind == Investigation.DESPERADO):
+                kind is None or kind == Investigation.DESPERADO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
                 if self.role_information > Player.DESPERADO_ACTIVATING:
                     return True
-        # TODO implement police officer
+        if self.elected_roles.filter(name__iexact='police officer').exists() and (
+                kind is None or kind == Investigation.POLICE_OFFICER):
+            if not Investigation.objects.filter(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.POLICE_OFFICER).exists():
+                return (not death) or self.has_clues_to_investigate(death.murderee)
         return False
 
     def save(self, *args, **kwargs):
@@ -585,7 +592,7 @@ class Death(models.Model):
                             receiver.save()
                     # Transfer items to killer
                     for item in self.murderee.item_set.all():
-                        #Discard item if used
+                        # Discard item if used
                         if item.used:
                             item.owner = None
                             item.save()
@@ -748,7 +755,7 @@ class Item(models.Model):
         if self.type == Item.SHOVEL and not target.is_alive():
             self.result = target.death.get_shovel_text()
             self.game.log(message="%s shoveled %s with Shovel %d and got a result of %s." % (
-            self.owner, target, self.number, self.result),
+                self.owner, target, self.number, self.result),
                           users_who_can_see=[self.owner])
             self.used = datetime.now()
             self.target = target
