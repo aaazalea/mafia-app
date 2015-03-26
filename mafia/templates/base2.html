@@ -5,8 +5,8 @@
 {% bootstrap_javascript %}
 
 {% block bootstrap3_extra_head %}
-    <meta http-equiv="refresh" content="180">
     <link rel="shortcut icon" href="{% static 'mafia-icon.png' %}" type="image/png"/>
+    {% block mafia_extra_head %}{% endblock %}
 {% endblock %}
 
 {% block bootstrap3_content %}
@@ -37,7 +37,7 @@
                         </a></li>
                     {% else %}
                         <li class="navbar-text">No Current Game</li>
-                        <li><a href="{% url 'admin:login' %}">Log in as admin</a></li>
+                        <li><a href="{% url 'accounts:login' %}">Log in</a></li>
                         {% if next_game %}
                             <li><a href="{% url 'forms:sign_up' %}">Sign up for <b>{{ next_game.name }}</b></a></li>
                         {% endif %}

@@ -4,8 +4,8 @@ from models import *
 from django.contrib import admin
 
 
-admin.site.register(Investigation)
-admin.site.register(Item)
+# admin.site.register(Investigation)
+# admin.site.register(Item)
 
 
 class RoleAdmin(admin.ModelAdmin):
@@ -14,11 +14,11 @@ class RoleAdmin(admin.ModelAdmin):
 admin.site.register(Role, RoleAdmin)
 
 
-class DeathAdmin(admin.ModelAdmin):
-    list_display = ('murderee', 'murderer', 'when', 'where')
-
-
-admin.site.register(Death, DeathAdmin)
+# class DeathAdmin(admin.ModelAdmin):
+#     list_display = ('murderee', 'murderer', 'when', 'where')
+#
+#
+# admin.site.register(Death, DeathAdmin)
 
 
 class PlayerInline(admin.TabularInline):

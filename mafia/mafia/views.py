@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from operator import add
+from random import shuffle
 
 from django.conf import settings
 from django.contrib import messages
@@ -20,13 +22,14 @@ from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteF
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
-    SuperheroDay
+    SuperheroDay, GayKnightPair
 from django.core.urlresolvers import reverse
 
 
 def notifier(function):
     def new_func(request, *args, **kwargs):
         if request.user.is_authenticated():
+
             unread = Notification.objects.filter(user=request.user, game__active=True, seen=False)
             for message in unread:
                 if message.is_bad:
@@ -53,16 +56,20 @@ def message_seen(request, message):
 def index(request):
     params = {}
     if request.user.username == "admin":
-        return HttpResponseRedirect("/admin")
+        return HttpResponseRedirect("/admin/mafia/game")
     try:
         game = Game.objects.get(active=True)
     except Game.DoesNotExist:
-        try:  # try again
-            game = Game.objects.get(god=request.user, archived=False)
-            return HttpResponseRedirect(reverse('forms:configure_game'))
-        except Game.DoesNotExist:
-            logout(request)
-            return HttpResponseRedirect("/accounts/login")
+        if request.user.is_authenticated():
+            try:
+                game = Game.objects.get(god=request.user, archived=False)
+                return HttpResponseRedirect(reverse('configure_game'))
+            except Game.DoesNotExist:
+                messages.warning(request, "There is no current game; please log in as a mod or admin.")
+                logout(request)
+                return HttpResponseRedirect(reverse('past_games'))
+        else:
+            return HttpResponseRedirect(reverse('past_games'))
 
     if game.current_day == 0:
         messages.info(request,
@@ -154,7 +161,9 @@ def superhero_form(request):
                 p = None
             SuperheroDay.objects.create(day=today + 1, paranoia=p, secret_identity=s, owner=me)
         if superhero_identity:
-            me.game.log("%s has set superhero identity for day %d, with paranoia target %s." % (me, today + 1, paranoia), users_who_can_see=[me])
+            me.game.log(
+                "%s has set superhero identity for day %d, with paranoia target %s." % (me, today + 1, paranoia),
+                users_who_can_see=[me])
         else:
             me.game.log("%s has set secret identity for day %d" % (me, today + 1), users_who_can_see=[me])
 
@@ -163,7 +172,6 @@ def superhero_form(request):
     else:
         return render(request, 'form.html', {'form': form, 'player': me, 'title': 'Superhero Form',
                                              'url': reverse('forms:superhero')})
-
 
 
 @notifier
@@ -370,20 +378,24 @@ def lynch_vote(request):
         messages.add_message(request, messages.ERROR, "Dead people don't vote. :(")
         return HttpResponseRedirect("/")
 
+
 @notifier
 @login_required
 def items(request):
     # TODO is_evil ?
     game = Game.objects.get(active=True)
     if request.user == game.god:
-        messages.add_message(request, messages.WARNING, "Sorry, this view has not been implemented for you. Check the game log instead.")
+        messages.add_message(request, messages.WARNING,
+                             "Sorry, this view has not been implemented for you. Check the game log instead.")
         return HttpResponseRedirect("/")
     player = Player.objects.get(user=request.user, game__active=True)
     if player.is_alive():
         return render(request, "items.html", {'player': player, 'game': game})
     else:
-        messages.add_message(request, messages.WARNING, "You're dead, so you can't use items. Check the game log instead.")
+        messages.add_message(request, messages.WARNING,
+                             "You're dead, so you can't use items. Check the game log instead.")
         return HttpResponseRedirect("/")
+
 
 @notifier
 @login_required
@@ -394,9 +406,10 @@ def destroy_item(request, id):
         messages.add_message(request, messages.WARNING, "That item does not belong to you.")
         return HttpResponseRedirect("/")
     current_item.owner = None
-    player.game.log(message="%s has destroyed %s" %(player, current_item.get_name()), users_who_can_see=[player])
+    player.game.log(message="%s has destroyed %s" % (player, current_item.get_name()), users_who_can_see=[player])
     current_item.save()
     return HttpResponseRedirect(reverse('items'))
+
 
 @notifier
 @login_required
@@ -416,6 +429,7 @@ def item(request, item_id, password):
         # using the item
         return HttpResponse("Using items is not yet implemented.")
 
+
 @notifier
 @login_required
 def count_the_mafia(request):
@@ -432,6 +446,7 @@ def count_the_mafia(request):
     except Player.DoesNotExist:
         pass
     return HttpResponseRedirect("/")
+
 
 @sensitive_post_parameters()
 @csrf_protect
@@ -485,6 +500,7 @@ def go_desperado(request):
         player.save()
     return HttpResponseRedirect("/")
 
+
 @notifier
 @login_required
 def undo_desperado(request):
@@ -506,8 +522,6 @@ def login(request, template_name='registration/login.html',
     """
     Displays the login form and handles the login action.
     """
-    if not Game.objects.filter(active=True).exists():
-        return HttpResponseRedirect(reverse('past_games'))
     redirect_to = request.POST.get(redirect_field_name,
                                    request.GET.get(redirect_field_name, ''))
 
@@ -746,6 +760,7 @@ def past_games(request):
     return render(request, "past_games.html",
                   {'games': games, 'current_game': current_game, 'next_game': next_game})
 
+
 @login_required
 def configure_game(request):
     try:
@@ -754,5 +769,105 @@ def configure_game(request):
         messages.error(request, "You may not configure a game at this time.")
         return HttpResponseRedirect("/")
 
-    return HttpResponse("Not implemented yet")
+    if request.POST and 'purpose' in request.POST and request.POST['purpose'] == 'roles':
+        roles = [(r, int(request.POST['rolenum%d' % r.id])) for r in Role.objects.all()]
+        num_roles = sum(b for a, b in roles)
+        num_players = len(game.player_set.all())
+        err = False
+        if num_roles != num_players:
+            messages.error(request, "There are %d players, but the total number of roles you have entered is %d." % (
+                num_players, num_roles))
+            err = True
+
+        for role, count in roles:
+            if role.name == "Mafia":
+                if count <= 0:
+                    messages.error(request, "Please enter a positive number of mafia")
+                    err = True
+            elif role.name == "Gay Knight":
+                if count < 0 or count % 2 != 0:
+                    messages.error(request, "Please enter a nonnegative even number of Gay Knights")
+                    err = True
+            else:
+                if count < 0:
+                    messages.error(request, "There are a negative number of players with the role %s" % role.name)
+                    err = True
+
+        if not err:
+            roles_to_randomize = reduce(add, ([role] * count for role, count in roles), [])
+            shuffle(roles_to_randomize)
+            for player, role in zip(game.player_set.all(), roles_to_randomize):
+                player.role = role
+                player.save()
+            GayKnightPair.objects.filter(player1__game=game).delete()
+            messages.success(request, "Randomized roles successfully.")
+    else:
+        counts = dict((r, 0) for r in Role.objects.all())
+        for player in game.player_set.all():
+            if player.role:
+                counts[player.role] += 1
+        roles = [(a, counts[a]) for a in Role.objects.all()]
+
+    if request.POST and 'purpose' in request.POST and request.POST['purpose'] == 'knights':
+        GayKnightPair.objects.filter(player1__game=game).delete()
+        gay_knights = list(game.player_set.filter(role__name="Gay Knight").all())
+        shuffle(gay_knights)
+        for i in xrange(len(gay_knights) / 2):
+            GayKnightPair.objects.create(player1=gay_knights[i * 2],
+                                         player2=gay_knights[i * 2 + 1])
+        messages.success(request, "Paired GNs successfully.")
+
+    if request.POST and 'purpose' in request.POST and request.POST['purpose'] == 'start':
+        print "starting game"
+        messages.success(request, "Game started successfully. Players "  # have been notified by e-mail and
+                                  " can now log in.")
+        # TODO email the players
+        game.increment_day()
+        return HttpResponseRedirect("/")
+
+    if request.POST and 'purpose' in request.POST and request.POST['purpose'] == "items":
+        items = [(it, int(request.POST['item_%s' % it[0]])) for it in Item.ITEM_TYPE]
+        err = False
+        num_items = sum(b for a, b in items)
+        num_players = len(game.player_set.all())
+
+        if num_players < num_items:
+            messages.error(request,
+                           "There are more items than players - %d items, %d players" % (num_items, num_players))
+            err = True
+
+        for it, count in items:
+            if it[0] == Item.MICROPHONE:
+                count_mics = count
+            elif it[0] == Item.RECEIVER:
+                count_recs = count
+
+            if count < 0:
+                messages.error(request, "There is a negative number of %ss" % it[1])
+                err = True
+
+        if count_mics != count_recs:
+            messages.error(request, "There should be the same number of microphones as receivers.")
+            err = True
+
+        if not err:
+            game.item_set.all().delete()
+            items_to_randomize = reduce(add, (zip([it] * count, xrange(1, count + 1)) for it, count in items),
+                                        [None] * (num_players - num_items))
+            shuffle(items_to_randomize)
+            for player, item in zip(game.player_set.all(), items_to_randomize):
+                if item:
+                    itempair = item[0]
+                    itemnum = item[1]
+                    item_type = itempair[0]
+                    Item.objects.create(game=game, owner=player, number=itemnum, type=item_type)
+            messages.success(request, "Randomized items successfully.")
+
+    else:
+        counts = dict((it, 0) for it in Item.ITEM_TYPE)
+        for item in game.item_set.all():
+            counts[item.type] += 1
+        items = [(item, counts[item]) for item in Item.ITEM_TYPE]
+    params = dict(game=game, roles=roles, items=items)
+    return render(request, "configure_game.html", params)
 

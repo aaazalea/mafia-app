@@ -213,8 +213,11 @@ class Player(models.Model):
         # TODO superhero
         # TODO mafia don
 
-
-
+    def item_string(self):
+        if self.item_set.exists():
+            return ", ".join(item.name for item in self.item_set.all())
+        else:
+            return ""
     def get_gn_partner(self):
         a = GayKnightPair.objects.filter(player1=self)
         if len(a) == 0:
@@ -926,7 +929,7 @@ class SuperheroDay(models.Model):
     owner = models.ForeignKey(Player)
     secret_identity = models.BooleanField(default=True)
     day = models.IntegerField(null=True)
-    paranoia = models.ForeignKey(Player, related_name='paranoid_superhero_days')
+    paranoia = models.ForeignKey(Player, related_name='paranoid_superhero_days', null=True)
 
     superhero_identity = property(lambda self: not self.secret_identity)
 

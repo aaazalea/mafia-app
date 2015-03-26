@@ -1,0 +1,95 @@
+{% extends "base2.html" %}
+{% block title %}Configure Game{% endblock %}
+{% block subtitle %}{{ game.name }}{% endblock %}
+{% block mafia_extra_head %}
+<script type="text/javascript">
+function assign_roles(){
+    $('#roles_form').submit();
+};
+function assign_items(){
+    $('#items_form').submit();
+};
+function match_GNs(){
+    $('#knights_form').submit();
+};
+function start_game(){
+    $('#start_game_form').submit();
+};
+</script>
+{% endblock %}
+
+{% block main %}
+    <div class="btn-toolbar" role="toolbar">
+        <button type="button" class="btn btn-default" onclick="assign_roles()"><span class="glyphicon glyphicon-edit" aria-hidden="true"></span>
+            Randomize Roles
+        </button>
+        <button type="button" class="btn btn-default" onclick="assign_items()"><span class="glyphicon glyphicon-record"
+                                                            aria-hidden="true"></span> Randomize Items
+        </button>
+        <button type="button" class="btn btn-default" onclick="match_GNs()"><span class="glyphicon glyphicon-heart-empty"
+                                                            aria-hidden="true"></span> Match Gay Knights
+        </button>
+        <button type="button" class="btn btn-default" onclick="start_game()"><span class="glyphicon glyphicon-ok" aria-hidden="true"></span>
+            Start Game
+        </button>
+
+    </div>
+    <br>
+
+
+    <table class="table table-bordered">
+        <tr>
+    {% for rolepair in roles %}
+            <td>{{ rolepair.0.name }}</td>
+    {% endfor %}
+        <tr>
+        <tr>
+            <form action="{% url 'configure_game' %}" method="post" id="roles_form">
+                {% csrf_token %}
+                <input name="purpose" value="roles" type="hidden">
+            {% for rolepair in roles %}
+                <td><input style="width: 40px" name="rolenum{{ rolepair.0.id }}" type="number" value="{{ rolepair.1 }}" form="roles_form"/></td>
+            {% endfor %}
+            </form>
+        <tr>
+    </table>
+    <table class="table table-bordered">
+        <tr>
+    {% for itempair in items %}
+            <td>{{ itempair.0.1 }}</td>
+    {% endfor %}
+        <tr>
+            <form action="{% url 'configure_game' %}" method="post" id="items_form">
+                {% csrf_token %}
+                <input name="purpose" value="items" type="hidden">
+            {% for itempair in items %}
+                <td><input style="width: 80px" name="item_{{ itempair.0.0 }}" type="number" value="{{ itempair.1 }}" form="items_form"/></td>
+            {% endfor %}
+            </form>
+        </tr>
+    </table>
+    <table class="table">
+        <tr>
+            <th>Player</th>
+            <th>Role</th>
+            <th>Items</th>
+            <th>Other</th>
+        </tr>
+        {% for player in game.player_set.all %}
+            <tr>
+                <td>{{ player.username }}</td>
+                <td>{{ player.role }}</td>
+                <td>{{ player.item_string }}</td>
+                <td>{% if player.role.name == "Gay Knight" %}Partner: {{ player.gn_partner }}{% endif %}</td>
+            </tr>
+        {% endfor %}
+    </table>
+    <form action="{% url 'configure_game' %}" method="post" id="knights_form">
+        {% csrf_token %}
+        <input name="purpose" value="knights" type="hidden">
+    </form>
+    <form action="{% url 'configure_game' %}" method="post" id="start_game_form">
+        {% csrf_token %}
+        <input name="purpose" value="start" type="hidden">
+    </form>
+{% endblock %}
