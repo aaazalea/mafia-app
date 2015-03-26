@@ -33,6 +33,8 @@ urlpatterns = patterns('',
                        url(r'^advance-day/$', 'mafia.views.advance_day', name='advance_day'),
                        url(r'^end-game/$', 'mafia.views.end_game', name='end_game'),
                        url(r'^configure-game/$', 'mafia.views.configure_game', name='configure_game'),
+                       url(r'^impeach/(?P<player_id>\d+)/(?P<electedrole_id>\d+)', 'mafia.views.impeach', name='impeach'),
+
 
                        url(r'^admin/', include(admin.site.urls)),
                        url(r'^form/', include(form_urls, namespace='forms')),

@@ -18,11 +18,11 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
-    SuperheroDay, GayKnightPair
+    SuperheroDay, GayKnightPair, ElectedRole
 from django.core.urlresolvers import reverse
 
 
@@ -722,7 +722,7 @@ def ic_reveal(request):
             messages.success(request, "You have successfully revealed as an IC.")
         return HttpResponseRedirect("/")
     player = Player.objects.get(game__active=True, user=request.user)
-    return render(request, "form.html", {'player': player, 'form': form})
+    return render(request, "form.html", {'player': player, 'form': form, 'title': 'Reveal as an Innocent Child'})
 
 
 def old_logs(request, game_id):
@@ -871,3 +871,30 @@ def configure_game(request):
     params = dict(game=game, roles=roles, items=items)
     return render(request, "configure_game.html", params)
 
+@login_required
+@user_passes_test(lambda u: Game.objects.filter(god=u, active=True).exists())
+def election(request):
+    form = ElectForm(request.POST or None)
+    if form.is_valid():
+        player_elected = Player.objects.get(id=form.data['player_elected'])
+        game = player_elected.game
+        position = ElectedRole.objects.get(id=form.data['position'])
+        player_elected.elected_roles.add(position)
+        player_elected.save()
+        game.log(anonymous_message="%s was elected to the position of %s." % (player_elected, position))
+        player_elected.notify("You've been elected as the new %s" % position, bad=False)
+        return HttpResponseRedirect(reverse('logs'))
+    else:
+        game = request.user.game_set.get(active=True)
+        return render(request, "form.html", {'user': request.user, 'game': game, 'form': form, 'title': "Submit a petition"})
+
+
+@login_required
+@user_passes_test(lambda u: Game.objects.filter(god=u, active=True).exists())
+def impeach(request, player_id, electedrole_id):
+    player = Player.objects.get(id=player_id)
+    position = ElectedRole.objects.get(id=electedrole_id)
+    player.elected_roles.remove(position)
+    player.notify("You've been impeached! You're no longer the %s." % position)
+    player.game.log(anonymous_message="%s is has been impeached from being %s" % (player, position))
+    return HttpResponseRedirect(reverse('logs'))

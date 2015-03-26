@@ -66,7 +66,11 @@
                                     <li><a href="{% url 'mafia_powers' %}">Mafia Powers</a></li>
                                     <li><a href="{% url 'advance_day' %}">Advance Day</a></li>
                                     <li><a href="{% url 'end_game' %}">End Game</a></li>
-
+                                    <li class="divider"></li>
+                                    <li><a href="{% url 'forms:elect' %}">Submit a petition</a></li>
+                                {% for person in game.elected_people %}
+                                    <li><a href="{% url 'impeach' person.0.id person.1.id %}">Impeach {{ person.0 }} as {{ person.1 }}</a></li>
+                                {% endfor %}
                                 </ul>
                             </li>
                         {% endif %}
@@ -125,7 +129,20 @@
                             </ul>
 
                         </li>
-                        <li><a href="{% url 'accounts:login' %}">Log in</a></li>
+          <li class="dropdown" id="menuLogin">
+            <a class="dropdown-toggle" href="#" data-toggle="dropdown" id="navLogin">Login</a>
+            <div class="dropdown-menu" style="padding:17px;">
+              <form class="form" id="formLogin" action="{% url 'accounts:login' %}" method="post">
+                  {% csrf_token %}
+                <input name="username" id="username" placeholder="Username" type="text" class="form-control">
+                <input name="password" id="password" placeholder="Password" type="password" class="form-control">
+                            <input type="hidden" name="next" value=""/>
+
+                  <button type="submit" id="btnLogin" class="btn btn-primary">Login</button>
+
+              </form>
+            </div>
+          </li>
 
                     {% endif %}
                 </ul>

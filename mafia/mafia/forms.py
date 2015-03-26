@@ -156,7 +156,15 @@ class InnocentChildRevealForm(forms.Form):
 
 class SuperheroForm(forms.Form):
     superhero_identity = forms.BooleanField(label="Will you be in superhero identity tomorrow?")
-    paranoia = forms.ModelChoiceField(Player.objects.filter(death__isnull=True),
+    paranoia = forms.ModelChoiceField(Player.objects.filter(death__isnull=True, game__active=True),
                                       label="Please choose a person for paranoia tomorrow "
                                             "(if you are going to be in secret identity, this will be ignored)",
                                       empty_label=None)
+
+
+class ElectForm(forms.Form):
+    player_elected = forms.ModelChoiceField(Player.objects.filter(death__isnull=True, game__active=True),
+                                            label="Who is being elected?")
+    position = forms.ModelChoiceField(ElectedRole.objects.all(),
+                                      label="What position are they being elected to?")
+

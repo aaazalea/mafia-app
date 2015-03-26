@@ -121,6 +121,10 @@ class Game(models.Model):
     def players_in_role_order(self):
         return self.player_set.order_by("role__name").all()
 
+    def elected_people(self):
+        for person in self.living_players:
+            for role in person.elected_roles.all():
+                yield person, role
 
 class Role(models.Model):
     name = models.CharField(max_length=20)
@@ -134,6 +138,7 @@ class Role(models.Model):
 class ElectedRole(models.Model):
     name = models.CharField(max_length=20)
     description = models.TextField(blank=True)
+
     def __str__(self):
         return self.name
 
@@ -218,6 +223,7 @@ class Player(models.Model):
             return ", ".join(item.name for item in self.item_set.all())
         else:
             return ""
+
     def get_gn_partner(self):
         a = GayKnightPair.objects.filter(player1=self)
         if len(a) == 0:
@@ -250,7 +256,6 @@ class Player(models.Model):
         else:
             return first_kill_day
     next_rogue_kill_day = property(cant_rogue_kill)
-
 
     def additional_info(self):
         if self.role == Role.objects.get(name__iexact='gay knight'):
@@ -898,6 +903,8 @@ class LogItem(models.Model):
     show_all = models.BooleanField(default=True)
 
     def visible_to(self, user):
+        if self.anonymous_text:
+            return self.show_all
         if user == self.game.god:
             return self.show_all
         elif self.mafia_can_view and Player.objects.filter(game=self.game, user=user, role__name="Mafia").exists():
