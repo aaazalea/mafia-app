@@ -1,7 +1,7 @@
 {% for message in messages %}
     <div class="alert{% if message.tags %} alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}{% endif %} alert-dismissable">
         <button type="button" class="close" data-dismiss="alert" aria-hidden="true"
-                onclick="$.get('/message-seen/{{ message|safe }}')">&#215;</button>
+                onclick="$.get('{% url 'message_seen' message %}')">&#215;</button>
         {{ message|safe }}
     </div>
 {% endfor %}

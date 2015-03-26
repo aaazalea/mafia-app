@@ -121,7 +121,9 @@ class MafiaPowerForm(forms.Form):
         elif charge.power == MafiaPower.FRAME_A_TOWNSPERSON or charge.power == MafiaPower.PLANT_EVIDENCE:
             charge.other_info = self.data['extra_field']
         elif charge.power == MafiaPower.HIRE_A_HITMAN:
-            charge.comment = "Hitman hired: %s" % self.data['extra_field']
+            charge.comment = self.data['extra_field']
+            charge.state = MafiaPower.SET
+            charge.other_info = 0
         elif charge.power == MafiaPower.CONSCRIPTION:
             charge.target.conscripted = True
             charge.target.notify("You've been conscripted into the mafia. "
@@ -167,4 +169,14 @@ class ElectForm(forms.Form):
                                             label="Who is being elected?")
     position = forms.ModelChoiceField(ElectedRole.objects.all(),
                                       label="What position are they being elected to?")
+
+class HitmanSuccessForm(forms.Form):
+    hitman = forms.ModelChoiceField(
+        queryset=MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN,state=MafiaPower.USED, game__active=True),
+        label='Which hitman?',empty_label=None)
+    kaboom = forms.BooleanField(initial=False, required=False,
+                                label="Was a kaboom used?")
+    when = forms.IntegerField(label="How many minutes ago did this happen?", min_value=0)
+
+    where = forms.CharField(label='Where did this happen?')
 

@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.models import AnonymousUser, User
 from django.db import IntegrityError
+from django.db.models import Q
 from django.template.response import TemplateResponse
 from django.utils.http import is_safe_url
 from django.shortcuts import resolve_url
@@ -18,7 +19,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
@@ -42,14 +43,15 @@ def notifier(function):
 
 
 def message_seen(request, message):
-    try:
-        notification = Notification.objects.get(user=request.user, game__active=True, seen=False, content=message)
+    notifications = Notification.objects.filter(user=request.user, game__active=True, seen=False, content=message)
+    for notification in notifications:
         notification.seen = True
         notification.save()
-        return HttpResponse("Notified")
+    return HttpResponse("Notified")
 
-    except Notification.DoesNotExist:
-        return HttpResponse("Oops")
+
+is_mafia = lambda u: Player.objects.filter(Q(role__name="Mafia") | Q(conscripted=True), user=u, game__active=True,
+                                           death__isnull=True).exists()
 
 
 @notifier
@@ -580,6 +582,7 @@ def player_intros(request):
 
 @notifier
 @login_required
+@user_passes_test(is_mafia)
 def mafia_power_form(request):
     form = MafiaPowerForm(request, request.POST or None)
     player = Player.objects.get(user=request.user, game__active=True)
@@ -588,17 +591,10 @@ def mafia_power_form(request):
         messages.add_message(request, messages.SUCCESS, message)
         return HttpResponseRedirect(reverse('mafia_powers'))
     else:
-        if player.is_evil and player.is_alive:
-            power = MafiaPower.objects.get(id=request.GET['power_id'])
-            return render(request, "form.html",
-                          {'form': form, 'player': player, "title": "Use a Mafia Power: %s" % power,
-                           'url': reverse('forms:mafia_power')})
-        elif not player.is_alive:
-            messages.add_message(request, messages.WARNING, "You're dead, you can't do mafia things!")
-            return HttpResponseRedirect(reverse("mafia_powers"))
-        else:
-            messages.add_message(request, messages.WARNING, "You're not mafia, you can't do mafia things!")
-            return HttpResponseRedirect("/")
+        power = MafiaPower.objects.get(id=request.GET['power_id'])
+        return render(request, "form.html",
+                      {'form': form, 'player': player, "title": "Use a Mafia Power: %s" % power,
+                       'url': reverse('forms:mafia_power')})
 
 
 @notifier
@@ -722,7 +718,8 @@ def ic_reveal(request):
             messages.success(request, "You have successfully revealed as an IC.")
         return HttpResponseRedirect("/")
     player = Player.objects.get(game__active=True, user=request.user)
-    return render(request, "form.html", {'player': player, 'form': form, 'title': 'Reveal as an Innocent Child'})
+    return render(request, "form.html", {'player': player, 'form': form, 'title': 'Reveal as an Innocent Child',
+                                         'url': reverse('forms:ic_reveal')})
 
 
 def old_logs(request, game_id):
@@ -871,6 +868,7 @@ def configure_game(request):
     params = dict(game=game, roles=roles, items=items)
     return render(request, "configure_game.html", params)
 
+
 @login_required
 @user_passes_test(lambda u: Game.objects.filter(god=u, active=True).exists())
 def election(request):
@@ -886,7 +884,9 @@ def election(request):
         return HttpResponseRedirect(reverse('logs'))
     else:
         game = request.user.game_set.get(active=True)
-        return render(request, "form.html", {'user': request.user, 'game': game, 'form': form, 'title': "Submit a petition"})
+        return render(request, "form.html",
+                      {'user': request.user, 'game': game, 'form': form, 'title': "Submit a petition",
+                       'url': reverse('forms:election')})
 
 
 @login_required
@@ -898,3 +898,48 @@ def impeach(request, player_id, electedrole_id):
     player.notify("You've been impeached! You're no longer the %s." % position)
     player.game.log(anonymous_message="%s is has been impeached from being %s" % (player, position))
     return HttpResponseRedirect(reverse('logs'))
+
+
+@login_required
+@user_passes_test(is_mafia)
+def cancel_hitman(request):
+    hitman = MafiaPower.objects.get(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET, game__active=True)
+    hitman.state = MafiaPower.AVAILABLE
+    hitman.target = None
+    hitman.day_used = None
+    hitman.comment = ""
+    hitman.other_info = None
+    hitman.user = None
+    hitman.save()
+    messages.info(request, "Cancelled hitman.")
+    hitman.game.log(message="The mafia have gotten rid of their hitman. Who knows what they did with the body...",
+                    mafia_can_see=True)
+    return HttpResponseRedirect(reverse('mafia_powers'))
+
+
+@login_required
+@user_passes_test(is_mafia)
+def hitman_success(request):
+    game = Game.objects.get(active=True)
+
+    if request.method == "POST":
+        form = HitmanSuccessForm(request.POST)
+        if form.is_valid():
+            where = form.data['where']
+            hitman = MafiaPower.objects.get(id=form.data['hitman'])
+            killed = hitman.target
+            when = datetime.now() - timedelta(minutes=int(form.data['when']))
+            kaboom = 'kaboom' in form.data
+
+            Death.objects.create(when=when, murderer=None, murderee=killed, kaboom=kaboom,
+                                 day=killed.game.current_day, where=where)
+            game.log("Hitman kill successful", mafia_can_see=True)
+            hitman.other_info = 1
+            hitman.save()
+            return HttpResponseRedirect("/")
+
+    else:
+        player = Player.objects.get(user=request.user, game__active=True)
+        form = HitmanSuccessForm()
+        return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:hitman_success'),
+                                             'title': 'Report a Hitman Kill'})

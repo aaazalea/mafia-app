@@ -74,6 +74,12 @@ class Game(models.Model):
             LogItem.objects.create(anonymous_text="Day %d start" % self.current_day,
                                    text="Day %d start" % self.current_day,
                                    game=self, day_start=self)
+
+            if self.mafiapower_set.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET).exists():
+                hitman = self.mafiapower_set.get(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET)
+                hitman.state = MafiaPower.USED
+                hitman.save()
+
         self.save()
 
 
@@ -125,6 +131,7 @@ class Game(models.Model):
         for person in self.living_players:
             for role in person.elected_roles.all():
                 yield person, role
+
 
 class Role(models.Model):
     name = models.CharField(max_length=20)
@@ -215,8 +222,8 @@ class Player(models.Model):
         else:
             # IC, Investigator
             return ""
-        # TODO superhero
-        # TODO mafia don
+            # TODO superhero
+            # TODO mafia don
 
     def item_string(self):
         if self.item_set.exists():
@@ -255,6 +262,7 @@ class Player(models.Model):
                     return False
         else:
             return first_kill_day
+
     next_rogue_kill_day = property(cant_rogue_kill)
 
     def additional_info(self):
@@ -321,13 +329,13 @@ class Player(models.Model):
                                                 investigation_type=Investigation.MAYORAL).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='investigator') and (
-                kind is None or kind == Investigation.INVESTIGATOR):
+                        kind is None or kind == Investigation.INVESTIGATOR):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.INVESTIGATOR).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='superhero') and (
-                kind is None or kind == Investigation.SUPERHERO):
+                        kind is None or kind == Investigation.SUPERHERO):
             # TODO implement secret identity / superhero identity
             # return not Investigation.exists(day=self.game.current_day-1,
             # investigator=self,investigation_type=Investigation.SH)
@@ -336,7 +344,7 @@ class Player(models.Model):
                                                 investigation_type=Investigation.SUPERHERO).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='Gay knight') and (
-                kind is None or kind == Investigation.GAY_KNIGHT) and \
+                        kind is None or kind == Investigation.GAY_KNIGHT) and \
                 (death is None or Death.murderee == self.gn_partner):
             if not len(Investigation.objects.filter(investigator=self,
                                                     day=self.game.current_day,
@@ -345,7 +353,7 @@ class Player(models.Model):
                 if not self.gn_partner.alive and death.murderee == self.gn_partner:
                     return True
         if self.role == Role.objects.get(name__iexact='Desperado') and (
-                kind is None or kind == Investigation.DESPERADO):
+                        kind is None or kind == Investigation.DESPERADO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
@@ -461,6 +469,12 @@ class Player(models.Model):
             links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
+            if MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET,
+                                         game__active=True).exists():
+                links.append((reverse("cancel_hitman"), "Cancel your hired hitman."))
+            elif MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.USED, game__active=True,
+                                           day_used=self.game.current_day - 1, other_info=0).exists():
+                links.append((reverse("forms:hitman_success"), "Report a kill on behalf of your hitman."))
         if self.role == Role.objects.get(name="Innocent Child"):
             links.append((reverse('forms:ic_reveal'), "Trust someone"))
         elif self.role == Role.objects.get(name="Superhero"):
@@ -503,9 +517,9 @@ class Death(models.Model):
                 # TODO does not take into account conscripted innocents making kills with innocent powers
                 self.free = True
             kaboom = None
-            if self.kaboom and not self.murderer.elected_roles.filter(
-                    name__iexact="Police officer").exists():
-                if not self.murderer.is_evil():
+            if self.kaboom and ((not self.murderer) or (not self.murderer.elected_roles.filter(
+                    name__iexact="Police officer").exists())):
+                if self.murderer and not self.murderer.is_evil():
                     raise Exception("Non-mafia attempt to use a kaboom without being police officer")
                 kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE,
                                                     game__active=True)
@@ -544,11 +558,12 @@ class Death(models.Model):
                 microphones = Item.objects.filter(owner=self.murderee, type=Item.MICROPHONE, used__isnull=True)
                 if self.kaboom:
                     for item in self.murderee.item_set.all():
-                        #Discard items
+                        # Discard items
                         item.owner = None
                         item.save()
                         self.murderee.game.log(message="%s, which %s was holding, was destroyed by KABOOM!" %
-                                               (item.get_name(), self.murderee), users_who_can_see=[self.murderee])
+                                                       (item.get_name(), self.murderee),
+                                               users_who_can_see=[self.murderee])
                 else:
                     # TODO Don
                     for mic in microphones:
@@ -561,14 +576,14 @@ class Death(models.Model):
                             receiver = Item.objects.get(type=Item.RECEIVER, number=number)
                             self.murderee.game.log(message="%s has heard from Receiver %d that %s killed %s." % (
                                 receiver.owner, number, self.murderer, self.murderee),
-                                     users_who_can_see=[receiver.owner])
+                                                   users_who_can_see=[receiver.owner])
                             receiver.owner.notify("You hear something from Receiver %d! %s killed %s!" % (
-                            number, self.murderer, self.murderee))
+                                number, self.murderer, self.murderee))
                             receiver.used = self.when
                             receiver.target = self.murderee
                             receiver.result = "%s killed %s!" % (self.murderer, self.murderee)
                             receiver.save()
-                    #Transfer items to killer
+                    # Transfer items to killer
                     for item in self.murderee.item_set.all():
                         #Discard item if used
                         if item.used:
@@ -577,8 +592,10 @@ class Death(models.Model):
                         else:
                             item.owner = self.murderer
                             self.murderee.game.log(message="%s transferred from %s to %s upon kill" %
-                                                   (item.get_name(), self.murderee, self.murderer), users_who_can_see=[self.murderer, self.murderee])
-                            self.murderer.notify("Upon killing %s, you received their %s" %(self.murderee, item.get_name()), bad=False)
+                                                           (item.get_name(), self.murderee, self.murderer),
+                                                   users_who_can_see=[self.murderer, self.murderee])
+                            self.murderer.notify(
+                                "Upon killing %s, you received their %s" % (self.murderee, item.get_name()), bad=False)
                             item.save()
 
         super(Death, self).save(*args, **kwargs)
@@ -594,7 +611,8 @@ class Death(models.Model):
     def is_investigable(self, investigation_type):
         if investigation_type == Investigation.GAY_KNIGHT:
             return True
-        elif (not CLUES_IN_USE) and MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
+        elif (not CLUES_IN_USE) and MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS,
+                                                              target=self.murderee).exists():
             return False
         return True
 
@@ -729,8 +747,9 @@ class Item(models.Model):
     def use(self, target=None):
         if self.type == Item.SHOVEL and not target.is_alive():
             self.result = target.death.get_shovel_text()
-            self.game.log(message="%s shoveled %s with Shovel %d and got a result of %s." % (self.owner, target, self.number, self.result),
-                     users_who_can_see=[self.owner])
+            self.game.log(message="%s shoveled %s with Shovel %d and got a result of %s." % (
+            self.owner, target, self.number, self.result),
+                          users_who_can_see=[self.owner])
             self.used = datetime.now()
             self.target = target
             self.save()
@@ -742,7 +761,8 @@ class Item(models.Model):
             return None
         elif self.type == Item.TASER:
             # TODO Make taser actually prevent killing
-            self.game.log(message="%s tased %s with Taser %d." % (self.owner, self.number), users_who_can_see=[self.owner, self.target])
+            self.game.log(message="%s tased %s with Taser %d." % (self.owner, self.number),
+                          users_who_can_see=[self.owner, self.target])
             self.used = datetime.now()
             self.target = target()
             self.save()
@@ -837,6 +857,8 @@ class MafiaPower(models.Model):
             return ""
 
     def __str__(self):
+        if self.power == MafiaPower.HIRE_A_HITMAN:
+            return "%s hired to kill %s" % (self.comment, self.target)
         return self.get_power_name()
 
     def extra(self):
@@ -851,6 +873,17 @@ class MafiaPower(models.Model):
         elif self.power == MafiaPower.PLANT_EVIDENCE:
             return "Evidence planted for %s%s" % (
                 ("Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
+        elif self.power == MafiaPower.HIRE_A_HITMAN:
+            if self.game.current_day == self.day_used:
+                return "Hitman for tomorrow"
+            elif self.game.current_day > 1 + self.day_used and self.other_info == 0:
+                return "Hitman unsuccessful"
+            elif self.other_info == 0:
+                return "Hitman has not killed yet today"
+            elif self.other_info == 1:
+                return "Hitman successful"
+            else:
+                return ""
         else:
             return ""
 

@@ -10,5 +10,6 @@ urlpatterns = patterns('',
                        url(r'^conspiracy_list/$', 'mafia.views.conspiracy_list_form', name='conspiracy_list'),
                        url(r'^sign-up/$', 'mafia.views.sign_up', name='sign_up'),
                        url(r'^elect/$', 'mafia.views.election', name='elect'),
-                       url(r'^ic-reveal/$', 'mafia.views.ic_reveal', name='ic_reveal')
+                       url(r'^ic-reveal/$', 'mafia.views.ic_reveal', name='ic_reveal'),
+                       url(r'^hitman-success/$', 'mafia.views.hitman_success', name='hitman_success'),
 )
