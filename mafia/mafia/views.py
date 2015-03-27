@@ -20,7 +20,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, ItemUseForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
@@ -141,9 +141,12 @@ def superhero_form(request):
         form = SuperheroForm(request.POST)
     else:
         today = me.game.current_day
-        today_day = me.superheroday_set.get(day=today)
-        form = SuperheroForm(initial={'superhero_identity': today_day.superhero_identity,
-                                      'paranoia': today_day.paranoia or me})
+        try:
+            today_day = me.superheroday_set.get(day=today)
+            form = SuperheroForm(initial={'superhero_identity': today_day.superhero_identity,
+                                          'paranoia': today_day.paranoia or me})
+        except SuperheroDay.DoesNotExist:
+            form = SuperheroForm(initial={'superhero_identity': False, 'paranoia': me})
     if form.is_valid():
         superhero_identity = 'superhero_identity' in form.data
         paranoia = Player.objects.get(id=form.data['paranoia'])
@@ -699,7 +702,7 @@ def logs(request):
     game = Game.objects.get(active=True)
     game_logs = [(log_item.get_text(request.user), log_item.time, log_item.is_day_start()) for log_item in
                  game.logitem_set.all() if
-                 log_item.visible_to(request.user)]
+                 log_item.visible_to_anon(request.user)]
     game_logs.sort(key=lambda a: a[1])
     try:
         player = Player.objects.get(game=game, user=request.user)
@@ -899,7 +902,7 @@ def election(request):
         game = request.user.game_set.get(active=True)
         return render(request, "form.html",
                       {'user': request.user, 'game': game, 'form': form, 'title': "Submit a petition",
-                       'url': reverse('forms:election')})
+                       'url': reverse('forms:elect')})
 
 
 @login_required
@@ -946,7 +949,8 @@ def hitman_success(request):
 
             Death.objects.create(when=when, murderer=None, murderee=killed, kaboom=kaboom,
                                  day=killed.game.current_day, where=where)
-            game.log("Hitman kill successful", mafia_can_see=True)
+            game.log(message="Hitman %s killed %s" % (hitman.comment, hitman.target),
+                     anonymous_message="% was killed at %s" % (killed, where), mafia_can_see=True)
             hitman.other_info = 1
             hitman.save()
             return HttpResponseRedirect("/")

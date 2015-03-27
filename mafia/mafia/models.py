@@ -19,6 +19,7 @@ class Game(models.Model):
     current_day = models.IntegerField(default=0)
     rules_url = models.URLField()
     mafia_counts = models.IntegerField(default=0)
+    today_start = models.DateTimeField(null=True)
 
     def log(self, message=None, anonymous_message=None, mafia_can_see=False, users_who_can_see=[]):
         if not message:
@@ -75,12 +76,15 @@ class Game(models.Model):
                                    text="Day %d start" % self.current_day,
                                    game=self, day_start=self)
 
+
             if self.mafiapower_set.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET).exists():
                 hitman = self.mafiapower_set.get(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET)
                 hitman.state = MafiaPower.USED
                 hitman.save()
 
+        self.today_start = datetime.now()
         self.save()
+
 
 
     def kill_day_end(self, player, why, log_message=True):
@@ -321,6 +325,10 @@ class Player(models.Model):
 
     investigations = property(get_investigations)
 
+    in_superhero_identity = property(
+        lambda self: self.superheroday_set.filter(day=self.game.current_day).exists() and self.superheroday_set.get(
+            day=self.game.current_day).superhero_identity)
+
     def has_clues_to_investigate(self, target):
         # TODO implement clues
         return True
@@ -342,11 +350,11 @@ class Player(models.Model):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.SUPERHERO).exists():
-                return self.superheroday_set.get(day=self.game.current_day).superhero_identity and (
+                return self.in_superhero_identity and (
                     (not death) or self.has_clues_to_investigate(death.murderee))
         if self.role == Role.objects.get(name__iexact='Gay knight') and (
                         kind is None or kind == Investigation.GAY_KNIGHT) and \
-                (death is None or Death.murderee == self.gn_partner):
+                (death is None or death.murderee == self.gn_partner):
             if not len(Investigation.objects.filter(investigator=self,
                                                     day=self.game.current_day,
                                                     investigation_type=Investigation.GAY_KNIGHT)) >= \
@@ -377,6 +385,8 @@ class Player(models.Model):
         super(Player, self).save(*args, **kwargs)
 
     def can_make_kills(self):
+        if Item.objects.filter(used__gt=self.game.today_start, type=Item.TASER, target=self).exists():
+            return False
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
             return True
         elif self.role == Role.objects.get(name__iexact='rogue'):
@@ -422,9 +432,8 @@ class Player(models.Model):
             if self.role_information == DESPERADO_DAYS:
                 return "Desperation (day %d)" % self.game.current_day
         elif self.role == Role.objects.get(name__iexact="Gay knight"):
-            if not self.gn_partner.alive and self.gn_partner.death.day + GN_DAYS_LIVE == self.game.current_day:
+            if (not self.gn_partner.alive) and self.gn_partner.death.day + GN_DAYS_LIVE == self.game.current_day:
                 return "Lovesickness (day %d)" % self.game.current_day
-        # elif self.role == Role.objects.get(name__iexact="Prophet")
 
         poisons = MafiaPower.objects.filter(power=MafiaPower.POISON, target=self)
         if poisons.exists():
@@ -486,7 +495,7 @@ class Player(models.Model):
         elif self.role == Role.objects.get(name="Superhero"):
             links.append((reverse('forms:superhero'), "Choose identity"))
         if self.elected_roles.filter(name="Mayor").exists() and self.game.mafia_counts < MAYOR_COUNT_MAFIA_TIMES:
-            links.append((reverse('count_the_mafia', "Count the Mafia")))
+            links.append((reverse('count_the_mafia'), "Count the Mafia"))
         return links
 
     def get_unread_notifications(self):
@@ -579,7 +588,7 @@ class Death(models.Model):
                         mic.result = "This microphone has been set off."
                         mic.save()
                         if Item.objects.filter(type=Item.RECEIVER, number=number, owner__isnull=False).exists():
-                            receiver = Item.objects.get(type=Item.RECEIVER, number=number)
+                            receiver = Item.objects.get(type=Item.RECEIVER, number=number, game=self.murderee.game)
                             self.murderee.game.log(message="%s has heard from Receiver %d that %s killed %s." % (
                                 receiver.owner, number, self.murderer, self.murderee),
                                                    users_who_can_see=[receiver.owner])
@@ -776,6 +785,7 @@ class Item(models.Model):
 
     def get_use_form(self):
         from forms import ItemUseForm
+
         return ItemUseForm(self)
 
     def use_text(self):
@@ -893,15 +903,15 @@ class MafiaPower(models.Model):
                 ("Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
         elif self.power == MafiaPower.HIRE_A_HITMAN:
             if self.game.current_day == self.day_used:
-                return "Hitman for tomorrow"
+                return "%s hired as a hitman for tomorrow" % self.comment
             elif self.game.current_day > 1 + self.day_used and self.other_info == 0:
-                return "Hitman unsuccessful"
+                return "%s was unsuccessful" % self.comment
             elif self.other_info == 0:
-                return "Hitman has not killed yet today"
+                return "Hitman %s has not killed yet today" % self.comment
             elif self.other_info == 1:
-                return "Hitman successful"
+                return "Hitman %s was successful" % self.comment
             else:
-                return ""
+                return self.comment
         else:
             return ""
 
@@ -953,9 +963,13 @@ class LogItem(models.Model):
     day_start = models.BooleanField(default=False)
     show_all = models.BooleanField(default=True)
 
-    def visible_to(self, user):
+    def visible_to_anon(self, user):
         if self.anonymous_text:
             return self.show_all
+        else:
+            return self.visible_to(user)
+
+    def visible_to(self, user):
         if user == self.game.god:
             return self.show_all
         elif self.mafia_can_view and Player.objects.filter(game=self.game, user=user, role__name="Mafia").exists():
@@ -978,7 +992,7 @@ class LogItem(models.Model):
 class Notification(models.Model):
     seen = models.BooleanField(default=False)
     user = models.ForeignKey(User)
-    content = models.CharField(max_length=75)
+    content = models.CharField(max_length=200)
     game = models.ForeignKey(Game)
     is_bad = models.BooleanField(default=True)
 

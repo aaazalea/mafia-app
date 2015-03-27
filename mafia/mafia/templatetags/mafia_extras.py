@@ -22,7 +22,7 @@ def get_vote(value, arg):
 def get_lynch(value, arg):
     choices = value.get_lynch(arg)[0]
     if choices:
-        return ", ".join(a for a in choices)
+        return ", ".join(a.username for a in choices)
     else:
         return "No lynch"
 
