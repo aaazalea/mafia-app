@@ -55,6 +55,8 @@ class Game(models.Model):
         if not self.active and not self.archived:
             # start the game
             self.active = True
+            for item in Item.objects.filter(game=self):
+                self.log(anonymous_message="%s was distributed to %s at game start" % (item.name, item.owner))
         else:
             # If anybody has been killed yet this game
             if Death.objects.filter(murderer__game=self).exists():
@@ -157,7 +159,7 @@ class ElectedRole(models.Model):
 class Player(models.Model):
     user = models.ForeignKey(User)
     game = models.ForeignKey(Game)
-    role = models.ForeignKey(Role, null=True)
+    role = models.ForeignKey(Role, null=True, blank=True)
     elected_roles = models.ManyToManyField(ElectedRole, blank=True)
     conscripted = models.BooleanField(default=False)
     introduction = models.TextField()

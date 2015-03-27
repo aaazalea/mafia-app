@@ -24,7 +24,7 @@
                     {% endif %}
                 </td>
                 {# TODO make destruction and execution work #}
-                {% if player.is_evil %}<td><a href="{% url 'destroy_item' i.id %}" class="btn btn-default">Destroy</a></td>{% endif %}
+                {# % if player.is_evil % #}<td><a href="{% url 'destroy_item' i.id %}" class="btn btn-default">Destroy</a></td>{# % endif % #}
             </tr>
         {% endfor %}
     </table>
