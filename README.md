@@ -5,6 +5,15 @@ A django application to make live-action mafia games easier.
 
 A planning trello board for this project is found at https://trello.com/b/2GcWonh3/mafia-webapp
 
+This document is incomplete - if you would like to contribute, send me an email at jakobw@mit.edu or a pull request.
+
+# Eye candy
+####Moderator setting up a game
+
+
+# A tutorial for users
+
+
 
 # Installation
 
@@ -12,7 +21,8 @@ A planning trello board for this project is found at https://trello.com/b/2GcWon
  - Create a virtual environment in the mafia-app directory with `virtualenv venv`
  - Activate the virtual environment `source venv/bin/activate`
  - Install dependencies - `pip install -r requirements.txt`
- - Set up the database - `./manage.py migrate
+ - Set up the database - `./manage.py migrate`
+ - Install the initial data with `./manage.py loaddata fixtures/initial_data.json`
  
  
 # Random Explanations

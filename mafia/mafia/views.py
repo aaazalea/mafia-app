@@ -874,10 +874,10 @@ def configure_game(request):
             messages.success(request, "Randomized items successfully.")
 
     else:
-        counts = dict((it, 0) for it in Item.ITEM_TYPE)
+        counts = dict((it[0], 0) for it in Item.ITEM_TYPE)
         for item in game.item_set.all():
             counts[item.type] += 1
-        items = [(item, counts[item]) for item in Item.ITEM_TYPE]
+        items = [(item, counts[item[0]]) for item in Item.ITEM_TYPE]
     params = dict(game=game, roles=roles, items=items)
     return render(request, "configure_game.html", params)
 
