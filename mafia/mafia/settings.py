@@ -32,7 +32,7 @@ DEBUG = True or not PRODUCTION
 
 TEMPLATE_DEBUG = DEBUG
 
-ALLOWED_HOSTS = ['mafia-testing.mit.edu', 'mafia-app.mit.edu', 'jakob.scripts.mit.edu', 'mafia.jakobw.scripts.mit.edu']
+ALLOWED_HOSTS = ['mafia-app.mit.edu']
 
 
 # Application definition
@@ -51,7 +51,6 @@ INSTALLED_APPS = (
 )
 
 MIDDLEWARE_CLASSES = (
-    'sslify.middleware.SSLifyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -128,3 +127,4 @@ NO_LYNCH_ALLOWED = True
 CLUES_IN_USE = False
 
 MAYOR_COUNT_MAFIA_TIMES = 2
+
