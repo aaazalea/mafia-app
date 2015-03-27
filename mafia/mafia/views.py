@@ -658,7 +658,7 @@ def resurrect_player(request, pid):
         player = Player.objects.get(id=pid)
         Death.objects.get(murderee=player).delete()
         messages.success(request, "%s resurrected" % player.username)
-        game.log("%s ressurected by %s" % (player, game.god.username))
+        game.log("%s resurrected by %s" % (player, game.god.username))
     return HttpResponseRedirect(reverse('player_intros'))
 
 
