@@ -170,6 +170,7 @@ class ElectForm(forms.Form):
     position = forms.ModelChoiceField(ElectedRole.objects.all(),
                                       label="What position are they being elected to?")
 
+
 class HitmanSuccessForm(forms.Form):
     hitman = forms.ModelChoiceField(
         queryset=MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN,state=MafiaPower.USED, game__active=True),
@@ -180,3 +181,15 @@ class HitmanSuccessForm(forms.Form):
 
     where = forms.CharField(label='Where did this happen?')
 
+
+class ItemUseForm(forms.Form):
+    def __init__(self, item, *args, **kwargs):
+        super(ItemUseForm, self).__init__(*args,initial={'item': item.id}, **kwargs)
+        if item.type == Item.SHOVEL:
+            self.fields['target'] = forms.ModelChoiceField(Player.objects.filter(death__isnull=False, game=item.game),
+                                                           label="Shovel whom?")
+        elif item.type == Item.TASER:
+            self.fields['target'] = forms.ModelChoiceField(Player.objects.filter(death__isnull=True, game=item.game),
+                                                           label="Whom did you taser?")
+
+    item = forms.IntegerField(widget=forms.HiddenInput())

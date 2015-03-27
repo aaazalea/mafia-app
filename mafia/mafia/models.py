@@ -222,7 +222,6 @@ class Player(models.Model):
         else:
             # IC, Investigator
             return ""
-            # TODO superhero
             # TODO mafia don
 
     def item_string(self):
@@ -233,9 +232,9 @@ class Player(models.Model):
 
     def get_gn_partner(self):
         a = GayKnightPair.objects.filter(player1=self)
-        if len(a) == 0:
+        if not a.exists():
             a = GayKnightPair.objects.filter(player2=self)
-            if len(a) == 0:
+            if not a.exists():
                 return None
             return a.all()[0].player1
         else:
@@ -333,36 +332,36 @@ class Player(models.Model):
                                                 investigation_type=Investigation.MAYORAL).exists():
                 return True
         if self.role == Role.objects.get(name__iexact='investigator') and (
-                kind is None or kind == Investigation.INVESTIGATOR):
+                        kind is None or kind == Investigation.INVESTIGATOR):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.INVESTIGATOR).exists():
                 return (not death) or self.has_clues_to_investigate(death.murderee)
         if self.role == Role.objects.get(name__iexact='superhero') and (
-                kind is None or kind == Investigation.SUPERHERO):
+                        kind is None or kind == Investigation.SUPERHERO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.SUPERHERO).exists():
                 return self.superheroday_set.get(day=self.game.current_day).superhero_identity and (
                     (not death) or self.has_clues_to_investigate(death.murderee))
         if self.role == Role.objects.get(name__iexact='Gay knight') and (
-                kind is None or kind == Investigation.GAY_KNIGHT) and \
+                        kind is None or kind == Investigation.GAY_KNIGHT) and \
                 (death is None or Death.murderee == self.gn_partner):
             if not len(Investigation.objects.filter(investigator=self,
                                                     day=self.game.current_day,
                                                     investigation_type=Investigation.GAY_KNIGHT)) >= \
                     GAY_KNIGHT_INVESTIGATIONS:
-                if not self.gn_partner.alive and death.murderee == self.gn_partner:
+                if not self.gn_partner.alive and ((not death) or (death.murderee == self.gn_partner)):
                     return True
         if self.role == Role.objects.get(name__iexact='Desperado') and (
-                kind is None or kind == Investigation.DESPERADO):
+                        kind is None or kind == Investigation.DESPERADO):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
                 if self.role_information > Player.DESPERADO_ACTIVATING:
                     return True
         if self.elected_roles.filter(name__iexact='police officer').exists() and (
-                kind is None or kind == Investigation.POLICE_OFFICER):
+                        kind is None or kind == Investigation.POLICE_OFFICER):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.POLICE_OFFICER).exists():
@@ -760,7 +759,7 @@ class Item(models.Model):
             self.used = datetime.now()
             self.target = target
             self.save()
-            return text
+            return self.result
         elif self.type == Item.MEDKIT:
             self.game.log(message="%s activated Medkit %d." % (self.owner, self.number), users_who_can_see=[self.owner])
             self.used = datetime.now()
@@ -768,12 +767,24 @@ class Item(models.Model):
             return None
         elif self.type == Item.TASER:
             # TODO Make taser actually prevent killing
-            self.game.log(message="%s tased %s with Taser %d." % (self.owner, self.number),
-                          users_who_can_see=[self.owner, self.target])
+
+            self.game.log(message="%s tased %s with Taser %d." % (self.owner, target, self.number),
+                          users_who_can_see=[self.owner, target])
             self.used = datetime.now()
-            self.target = target()
             self.save()
             return None
+
+    def get_use_form(self):
+        from forms import ItemUseForm
+        return ItemUseForm(self)
+
+    def use_text(self):
+        if self.type == Item.MEDKIT:
+            return "Use medkit (works until day end)"
+        elif self.type == Item.TASER:
+            return "Report use of taser"
+        elif self.type == Item.SHOVEL:
+            return "Shovel"
 
 
 class MafiaPower(models.Model):
@@ -985,7 +996,7 @@ class SuperheroDay(models.Model):
 
         :return: whether this superhero's paranoia worked yesterday
         """
-        return self.paranoia and self.paranoia.death and self.paranoia.death.day == day
+        return self.paranoia and self.paranoia.death and self.paranoia.death.day == self.owner.game.current_day - 1
 
     def __str__(self):
         if self.superhero_identity:

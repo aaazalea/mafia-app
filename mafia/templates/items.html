@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Items{% endblock %}
 
-
+{% load bootstrap3 %}
 {% block main %}
 
     <table class="table">
@@ -16,7 +16,11 @@
                     {% if i.used %}
                         {{ i.result }}
                     {% elif i.can_use_via_form %}
-                        {{ "Dropdown form and/or activation button goes here" }}
+                        <form action="{% url 'items' %}" method="post">
+                            {% csrf_token %}
+                            {% bootstrap_form i.get_use_form %}
+                    {% buttons submit=i.use_text %}{% endbuttons %}
+                        </form>
                     {% endif %}
                 </td>
                 {# TODO make destruction and execution work #}

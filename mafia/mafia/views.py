@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.models import AnonymousUser, User
 from django.db import IntegrityError
 from django.db.models import Q
+from django.forms import Form
 from django.template.response import TemplateResponse
 from django.utils.http import is_safe_url
 from django.shortcuts import resolve_url
@@ -19,7 +20,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, ItemUseForm
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
@@ -384,19 +385,31 @@ def lynch_vote(request):
 @notifier
 @login_required
 def items(request):
-    # TODO is_evil ?
+    if request.POST:
+        form = Form(request.POST)
+        if form.is_valid():
+            if 'target' in form.data:
+                target = Player.objects.get(id=form.data['target'])
+                item = Item.objects.get(id=form.data['item'])
+                messages.info(request, "item used: %s. Target: %s" % (item, target))
+                item.use(target)
+            else:
+                item = Item.objects.get(id=form.data['item'])
+                messages.info(request, "item used successfully: %s." % item)
+                item.use()
+
     game = Game.objects.get(active=True)
     if request.user == game.god:
         messages.add_message(request, messages.WARNING,
                              "Sorry, this view has not been implemented for you. Check the game log instead.")
-        return HttpResponseRedirect("/")
+        return HttpResponseRedirect(reverse('logs'))
     player = Player.objects.get(user=request.user, game__active=True)
     if player.is_alive():
         return render(request, "items.html", {'player': player, 'game': game})
     else:
         messages.add_message(request, messages.WARNING,
                              "You're dead, so you can't use items. Check the game log instead.")
-        return HttpResponseRedirect("/")
+        return HttpResponseRedirect(reverse('logs'))
 
 
 @notifier
