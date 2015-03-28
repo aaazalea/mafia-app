@@ -91,7 +91,7 @@
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
                                aria-expanded="false">Logged
-                                in as <b>{{ player.username }}</b> <span class="caret"></span></a>
+                                in as <b>{{ player.username }}</b> ({{ player.id }}) <span class="caret"></span></a>
                             <ul class="dropdown-menu" role="menu">
                                 <li><a href="{% url "your_role" %}"> Your role information</a></li>
                                 <li><a href="{% url "accounts:logout" %}">Log out</a></li>

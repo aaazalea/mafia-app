@@ -27,7 +27,10 @@
                 {% if user == game.god %}
                     <td>{% if p.alive %}<a href="{% url 'evict_player' p.id %}" class="btn btn-default">Evict</a>
                         {% else %}<a href="{% url 'resurrect_player' p.id %}" class="btn btn-default">Resurrect</a>
-                    {% endif %}</td>
+                    {% endif %}
+                    <a href="{% url 'impersonate-start' p.user.id %}" class="btn btn-default">Impersonate</a>
+
+                    </td>
                 {% endif %}
             </tr>
         {% endfor %}

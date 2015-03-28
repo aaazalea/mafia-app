@@ -45,6 +45,7 @@ INSTALLED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'impersonate',
     'bootstrap3',
     'mafia',
     'django_extensions',
@@ -58,6 +59,7 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.auth.middleware.SessionAuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'impersonate.middleware.ImpersonateMiddleware',
 )
 
 ROOT_URLCONF = 'mafia.urls'
@@ -110,6 +112,12 @@ STATICFILES_DIRS = (
     os.path.join(BASE_DIR, "static"),
     '/var/www/static/',
 )
+
+# django-impersonate
+
+IMPERSONATE_CUSTOM_ALLOW = 'mafia.views.request_is_god'
+
+
 
 # Mafia
 

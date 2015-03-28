@@ -38,6 +38,10 @@ def notifier(function):
                     messages.error(request, message.content)
                 else:
                     messages.info(request, message.content)
+            if request.user.is_impersonate:
+                messages.info(request,
+                              "You are impersonating right now. <a class='alert-link' href='%s'>Click here to stop.</a> " % reverse(
+                                  'impersonate-stop'))
         return function(request, *args, **kwargs)
 
     return new_func
@@ -53,6 +57,7 @@ def message_seen(request, message):
 
 is_mafia = lambda u: Player.objects.filter(Q(role__name="Mafia") | Q(conscripted=True), user=u, game__active=True,
                                            death__isnull=True).exists()
+request_is_god = lambda r: Game.objects.filter(god=r.user).exists()
 
 
 @notifier
