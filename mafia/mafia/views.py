@@ -695,6 +695,16 @@ def conspiracy_list_form(request):
             c = Player.objects.get(id=int(conspiree))
             conspiracy.conspired.add(c)
             consp_list.append(c.username)
+
+        conspiracy.drop = Player.objects.get(id=form.data['person_to_remove'])
+        if conspiracy.drop.username not in consp_list:
+            messages.error(request, "Your person-to-drop must be on your list.")
+            player = Player.objects.get(user=request.user, game__active=True)
+            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
+                                             'url': reverse('forms:conspiracy_list')})
+        conspiracy.backup1 = Player.objects.get(id=form.data['backup1'])
+        conspiracy.backup2 = Player.objects.get(id=form.data['backup2'])
+        conspiracy.backup3 = Player.objects.get(id=form.data['backup3'])
         conspiracy.save()
         player.game.log(
             message="%s has updated their conspiracy list for day %d to: [%s]" % (player, player.game.current_day + 1,

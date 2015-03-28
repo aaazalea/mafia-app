@@ -6,7 +6,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
-    MAYOR_COUNT_MAFIA_TIMES
+    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT
 from django.utils.datetime_safe import datetime
 
 NO_LYNCH = "No lynch"
@@ -73,6 +73,9 @@ class Game(models.Model):
                     self.kill_day_end(player, why)
 
                 player.increment_day()
+
+                # TODO oops, this is needed for conspiracy theorists
+                player.additional_info()
 
             self.current_day += 1
             LogItem.objects.create(anonymous_text="Day %d start" % self.current_day,
@@ -462,6 +465,34 @@ class Player(models.Model):
             poison = poisons[0]
             if poison.day_used == self.game.current_day:
                 self.notify("You've been poisoned! You die at day end on day %d" % (poison.day_used + 2))
+
+        if self.role == Role.objects.get(name="Conspiracy Theorist"):
+            consp_list = self.conspiracylist_set.get(day=self.game.current_day + 1)
+            count_dead = 0
+            if CONSPIRACY_LIST_SIZE_IS_PERCENT:
+                list_size = self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE
+            else:
+                list_size = CONSPIRACY_LIST_SIZE
+
+
+            conspiratees = list(consp_list.conspired.all())
+
+            if list_size < len(conspiratees):
+                consp_list.conspired.remove(consp_list.drop)
+                backups = [consp_list.drop, consp_list.backup1, consp_list.backup2, consp_list.backup3]
+            else:
+                backups = [consp_list.backup1, consp_list.backup2, consp_list.backup3]
+
+            for conspiratee in conspiratees:
+                if not conspiratee.is_alive():
+                    consp_list.conspired.remove(conspiratee)
+                    if count_dead < len(backups):
+                        consp_list.conspired.add(backups[count_dead])
+                    count_dead += 1
+
+            consp_list.save()
+
+
         self.save()
 
     def get_username(self):
@@ -1024,6 +1055,10 @@ class ConspiracyList(models.Model):
     owner = models.ForeignKey(Player)
     conspired = models.ManyToManyField(Player, related_name='conspiracies')
     day = models.IntegerField()
+    drop = models.ForeignKey(Player, related_name='conspiracies_drop', null=True)
+    backup1 = models.ForeignKey(Player, related_name='conspiracies_backup1', null=True)
+    backup2 = models.ForeignKey(Player, related_name='conspiracies_backup2', null=True)
+    backup3 = models.ForeignKey(Player, related_name='conspiracies_backup3', null=True)
 
 
 class LogItem(models.Model):

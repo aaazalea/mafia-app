@@ -134,14 +134,22 @@ class MafiaPowerForm(forms.Form):
 
 
 class ConspiracyListForm(forms.Form):
-    new_conspiracy_list = forms.ModelMultipleChoiceField(queryset=Player.objects.filter(game__active=True))
+    new_conspiracy_list = forms.ModelMultipleChoiceField(queryset=Player.objects.filter(game__active=True, death=None))
+    person_to_remove = forms.ModelChoiceField(Player.objects.filter(game__active=True, death=None),
+                                              label="Who would you remove if game got smaller?")
+    backup1 = forms.ModelChoiceField(Player.objects.filter(game__active=True, death=None),
+                                     label="Backup 1, in case someone dies", required=False)
+    backup2 = forms.ModelChoiceField(Player.objects.filter(game__active=True, death=None),
+                                     label="Backup 2, in case someone dies", required=False)
+    backup3 = forms.ModelChoiceField(Player.objects.filter(game__active=True, death=None),
+                                     label="Backup 3, in case someone dies", required=False)
 
     def clean_new_conspiracy_list(self):
         conspiracy_size = len(self.cleaned_data['new_conspiracy_list'])
         if CONSPIRACY_LIST_SIZE_IS_PERCENT:
             if conspiracy_size > ceil(Game.objects.get(
-                    active=True).number_of_living_players * 1.0 / CONSPIRACY_LIST_SIZE):
-                raise ValidationError("You may only have %d%% of game on your conspiracy list." % CONSPIRACY_LIST_SIZE)
+                    active=True).number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE):
+                raise ValidationError("You may only have %d%% of game on your conspiracy list (rounded up)." % CONSPIRACY_LIST_SIZE)
         else:
             if conspiracy_size > CONSPIRACY_LIST_SIZE:
                 raise ValidationError("You may only have %d people on your conspiracy list." % CONSPIRACY_LIST_SIZE)
@@ -170,8 +178,8 @@ class ElectForm(forms.Form):
 
 class HitmanSuccessForm(forms.Form):
     hitman = forms.ModelChoiceField(
-        queryset=MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN,state=MafiaPower.USED, game__active=True),
-        label='Which hitman?',empty_label=None)
+        queryset=MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.USED, game__active=True),
+        label='Which hitman?', empty_label=None)
     kaboom = forms.BooleanField(initial=False, required=False,
                                 label="Was a kaboom used?")
     when = forms.IntegerField(label="How many minutes ago did this happen?", min_value=0)
@@ -190,6 +198,7 @@ class ItemUseForm(forms.Form):
                                                            label="Whom did you taser?")
         elif item.type == Item.CAMERA:
             self.fields['target'] = forms.CharField(max_length=100, label="Where did you place the camera?")
+
     item = forms.IntegerField(widget=forms.HiddenInput())
 
 
@@ -199,10 +208,13 @@ class CCTVModelChoiceField(forms.ModelChoiceField):
         broken = "Broken " if cctv.result else ""
         return "%sCCTV %d (camera in \"%s\", CCTV held by %s)" % (broken, cctv.number, camera.result, cctv.owner)
 
+
 class CCTVDeathModelChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, death):
         return "%s (killed in %s)" % (death.murderee, death.where)
 
+
 class CCTVDeathForm(forms.Form):
-    cctv = CCTVModelChoiceField(Item.objects.filter(type=Item.CCTV, game__active=True), empty_label=None, label="Which CCTV?")
+    cctv = CCTVModelChoiceField(Item.objects.filter(type=Item.CCTV, game__active=True), empty_label=None,
+                                label="Which CCTV?")
     death = CCTVDeathModelChoiceField(Death.objects.filter(murderee__game__active=True, murderer__isnull=False))
