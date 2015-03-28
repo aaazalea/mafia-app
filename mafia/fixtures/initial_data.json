@@ -113,6 +113,14 @@
         },
         "model": "mafia.electedrole",
         "pk": 2
+    },
+    {
+        "fields": {
+            "name": "Don",
+            "description": "Whenever a mafia (not rogues) is elected mayor, they automatically become the Don. When the Don makes a kill, the victim’s microphone does not work. Additionally, the Don comes up negative if an investigator tries to investigate them for any kill. If two consecutive mafia kills are made by the Don, then the mafia loses the Don powers (though if they are impeached then reelected, they can become Don again). Even if a mafia is no longer Don, they still come up negative on all kills they made before they lost their Don powers."
+        },
+        "model": "mafia.electedrole",
+        "pk": 3
     }
 
 ]

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Transfer Item{% endblock %}
+{% block subtitle %}{{ item.name }}{% endblock %}
+{% block mafia_extra_head %}<style type="text/css">
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .container, .container * {
+    visibility: visible;
+  }
+  .container {
+    position: absolute;
+    left: 0;
+    top: 0;
+  }
+}
+</style>
+{% endblock %}
+{% block main %}
+
+    <p>This is the item-transfer page for <b>{{ item.name }}</b>. To transfer the item to another player, print out or write down this page, and hand them the item. If they go to the URL or scan the QR code, the item will transfer.</p>
+
+    <img src="http://chart.googleapis.com/chart?cht=qr&chs=400x400&chl=https://mafia-app.mit.edu{% url 'transfer_item' item_id=item.id password=item.password %}">
+    <h3>https://mafia-app.mit.edu{% url 'transfer_item' item_id=item.id password=item.password %}</h3>
+
+
+
+
+{% endblock %}
+

@@ -116,7 +116,7 @@ STATICFILES_DIRS = (
 # django-impersonate
 
 IMPERSONATE_CUSTOM_ALLOW = 'mafia.views.request_is_god'
-
+IMPERSONATE_REDIRECT_FIELD_NAME = 'next'
 
 
 # Mafia

@@ -66,6 +66,7 @@
                                     <li><a href="{% url 'mafia_powers' %}">Mafia Powers</a></li>
                                     <li><a href="{% url 'advance_day' %}">Advance Day</a></li>
                                     <li><a href="{% url 'end_game' %}">End Game</a></li>
+                                    <li><a href="{% url 'forms:cctv_death' %}">Notify CCTV holder</a></li>
                                     <li class="divider"></li>
                                     <li><a href="{% url 'forms:elect' %}">Submit a petition</a></li>
                                 {% for person in game.elected_people %}
@@ -91,7 +92,7 @@
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
                                aria-expanded="false">Logged
-                                in as <b>{{ player.username }}</b> ({{ player.id }}) <span class="caret"></span></a>
+                                in as <b>{{ player.username }}</b> <span class="caret"></span></a>
                             <ul class="dropdown-menu" role="menu">
                                 <li><a href="{% url "your_role" %}"> Your role information</a></li>
                                 <li><a href="{% url "accounts:logout" %}">Log out</a></li>
@@ -153,7 +154,7 @@
     </nav>
     <div class="container">
         <div class="page-header">
-            <h1>{% block title %}(no title){% endblock %}<small>{% block subtitle %}{% endblock %}</small></h1>
+            <h1>{% block title %}(no title){% endblock %} <small>{% block subtitle %}{% endblock %}</small></h1>
         </div>
 
         {% bootstrap_messages %}

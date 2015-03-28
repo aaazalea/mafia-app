@@ -125,10 +125,7 @@ class MafiaPowerForm(forms.Form):
             charge.state = MafiaPower.SET
             charge.other_info = 0
         elif charge.power == MafiaPower.CONSCRIPTION:
-            charge.target.conscripted = True
-            charge.target.notify("You've been conscripted into the mafia. "
-                                 "Congratulations on your excellent life choices.", bad=False)
-            charge.target.save()
+            charge.target.conscript()
         charge.save()
 
         charge.target.game.log(message=charge.get_log_message(), mafia_can_see=True)
@@ -184,12 +181,28 @@ class HitmanSuccessForm(forms.Form):
 
 class ItemUseForm(forms.Form):
     def __init__(self, item, *args, **kwargs):
-        super(ItemUseForm, self).__init__(*args,initial={'item': item.id}, **kwargs)
+        super(ItemUseForm, self).__init__(*args, initial={'item': item.id}, **kwargs)
         if item.type == Item.SHOVEL:
             self.fields['target'] = forms.ModelChoiceField(Player.objects.filter(death__isnull=False, game=item.game),
                                                            label="Shovel whom?")
         elif item.type == Item.TASER:
             self.fields['target'] = forms.ModelChoiceField(Player.objects.filter(death__isnull=True, game=item.game),
                                                            label="Whom did you taser?")
-
+        elif item.type == Item.CAMERA:
+            self.fields['target'] = forms.CharField(max_length=100, label="Where did you place the camera?")
     item = forms.IntegerField(widget=forms.HiddenInput())
+
+
+class CCTVModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, cctv):
+        camera = Item.objects.get(type=Item.CAMERA, number=cctv.number, game=cctv.game)
+        broken = "Broken " if cctv.result else ""
+        return "%sCCTV %d (camera in \"%s\", CCTV held by %s)" % (broken, cctv.number, camera.result, cctv.owner)
+
+class CCTVDeathModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, death):
+        return "%s (killed in %s)" % (death.murderee, death.where)
+
+class CCTVDeathForm(forms.Form):
+    cctv = CCTVModelChoiceField(Item.objects.filter(type=Item.CCTV, game__active=True), empty_label=None, label="Which CCTV?")
+    death = CCTVDeathModelChoiceField(Death.objects.filter(murderee__game__active=True, murderer__isnull=False))

@@ -4,27 +4,33 @@
 {% load bootstrap3 %}
 {% block main %}
 
-    <table class="table">
+    <table class="table table-bordered">
         <tr>
             <th>Item</th>
-            <th>Action</th>
+            <th>Use/Result</th>
+            <th>Transfer/Destroy</th>
         </tr>
         {% for i in player.item_set.all %}
             <tr{% if i.used %} class="danger"{% endif %}>
                 <td>{{ i.name }}</td>
-                <td>
+                <td width="60%">
                     {% if i.used %}
-                        {{ i.result }}
+                        {{ i.get_result_text }}
                     {% elif i.can_use_via_form %}
                         <form action="{% url 'items' %}" method="post">
                             {% csrf_token %}
                             {% bootstrap_form i.get_use_form %}
                     {% buttons submit=i.use_text %}{% endbuttons %}
                         </form>
+                    {% else %}
+                        {{ i.get_result_text }}
                     {% endif %}
                 </td>
-                {# TODO make destruction and execution work #}
-                {# % if player.is_evil % #}<td><a href="{% url 'destroy_item' i.id %}" class="btn btn-default">Destroy</a></td>{# % endif % #}
+                <td>{% if not i.used %}
+                    {# % if player.is_evil % #}<a href="{% url 'destroy_item' i.id %}" class="btn btn-danger">Destroy</a>{# % endif % #}
+                    <a href="{% url 'transfer_item' item_id=i.id password=i.password %}" class="btn btn-default">Get Transferrable Physrep</a>
+                {% endif %}</td>
+
             </tr>
         {% endfor %}
     </table>

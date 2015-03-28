@@ -4,6 +4,7 @@ from django import forms
 from django.core.urlresolvers import reverse
 from django.db import models
 from django.contrib.auth.models import User
+from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES
 from django.utils.datetime_safe import datetime
@@ -55,7 +56,7 @@ class Game(models.Model):
         if not self.active and not self.archived:
             # start the game
             self.active = True
-            for item in Item.objects.filter(game=self):
+            for item in Item.objects.filter(game=self).order_by('type', 'number'):
                 self.log(anonymous_message="%s was distributed to %s at game start" % (item.name, item.owner))
         else:
             # If anybody has been killed yet this game
@@ -78,7 +79,6 @@ class Game(models.Model):
                                    text="Day %d start" % self.current_day,
                                    game=self, day_start=self)
 
-
             if self.mafiapower_set.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET).exists():
                 hitman = self.mafiapower_set.get(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET)
                 hitman.state = MafiaPower.USED
@@ -86,7 +86,6 @@ class Game(models.Model):
 
         self.today_start = datetime.now()
         self.save()
-
 
 
     def kill_day_end(self, player, why, log_message=True):
@@ -322,6 +321,8 @@ class Player(models.Model):
 
     is_evil = lambda self: self.role.evil_by_default or self.conscripted
 
+    is_mafia_don = lambda self: self.elected_roles.filter(name='Don').exists()
+
     def get_investigations(self):
         return Investigation.objects.filter(investigator=self)
 
@@ -510,6 +511,39 @@ class Player(models.Model):
         Notification.objects.create(user=self.user, game=self.game, seen=False, content=message, is_bad=bad)
         self.game.log_notification(message="Notification for %s: '%s'" % (self, message), users_who_can_see=[self])
 
+    def impeach(self, position):
+        self.elected_roles.remove(position)
+        self.notify("You've been impeached! You're no longer the %s." % position)
+
+        if self.is_mafia_don() and position.name == "Mayor":
+            self.elected_roles.remove(ElectedRole.objects.get(name="Don"))
+
+        self.save()
+        self.game.log(anonymous_message="%s is has been impeached from being %s" % (self, position))
+
+    def elect(self, position):
+        self.elected_roles.add(position)
+        self.game.log(anonymous_message="%s was elected to the position of %s." % (self, position))
+        self.notify("You've been elected as the new %s" % position, bad=False)
+
+        if self.is_evil() and position.name == "Mayor":
+            self.elected_roles.add(ElectedRole.objects.get(name="Don"))
+            self.notify("You're now the mafia don. Muahahaha.", bad=False)
+            self.game.log("%s has become the mafia don. Muahahahaha." % self, mafia_can_see=True)
+
+        self.save()
+
+    def conscript(self):
+        self.conscripted = True
+        self.notify("You've been conscripted into the mafia. "
+                    "Congratulations on your excellent life choices.", bad=False)
+        if self.elected_roles.filter(name="Mayor").exists():
+            self.elected_roles.add(ElectedRole.get(name="Don"))
+            self.notify("You're now the mafia don. Muahahaha.", bad=False)
+            self.game.log("%s has become the mafia don. Muahahahaha." % self, mafia_can_see=True)
+            self.save()
+        self.save()
+
 
 class Death(models.Model):
     murderer = models.ForeignKey(Player, related_name='kills', null=True)
@@ -519,6 +553,7 @@ class Death(models.Model):
     where = models.CharField(max_length=100)
     free = models.BooleanField(default=False)
     day = models.IntegerField()
+    made_by_don = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
         if not self.pk:
@@ -582,24 +617,24 @@ class Death(models.Model):
                                                        (item.get_name(), self.murderee),
                                                users_who_can_see=[self.murderee])
                 else:
-                    # TODO Don
-                    for mic in microphones:
-                        number = mic.number
-                        # TODO should mics transfer upon death?
-                        mic.used = self.when
-                        mic.result = "This microphone has been set off."
-                        mic.save()
-                        if Item.objects.filter(type=Item.RECEIVER, number=number, owner__isnull=False).exists():
-                            receiver = Item.objects.get(type=Item.RECEIVER, number=number, game=self.murderee.game)
-                            self.murderee.game.log(message="%s has heard from Receiver %d that %s killed %s." % (
-                                receiver.owner, number, self.murderer, self.murderee),
-                                                   users_who_can_see=[receiver.owner])
-                            receiver.owner.notify("You hear something from Receiver %d! %s killed %s!" % (
-                                number, self.murderer, self.murderee))
-                            receiver.used = self.when
-                            receiver.target = self.murderee
-                            receiver.result = "%s killed %s!" % (self.murderer, self.murderee)
-                            receiver.save()
+                    if not self.murderer.is_mafia_don():
+                        for mic in microphones:
+                            number = mic.number
+                            # TODO should mics transfer upon death?
+                            mic.used = self.when
+                            mic.result = "This microphone has been set off."
+                            mic.save()
+                            if Item.objects.filter(type=Item.RECEIVER, number=number, owner__isnull=False).exists():
+                                receiver = Item.objects.get(type=Item.RECEIVER, number=number, game=self.murderee.game)
+                                self.murderee.game.log(message="%s has heard from Receiver %d that %s killed %s." % (
+                                    receiver.owner, number, self.murderer, self.murderee),
+                                                       users_who_can_see=[receiver.owner])
+                                receiver.owner.notify("You hear something from Receiver %d! %s killed %s!" % (
+                                    number, self.murderer, self.murderee))
+                                receiver.used = self.when
+                                receiver.target = self.murderee
+                                receiver.result = "%s killed %s!" % (self.murderer, self.murderee)
+                                receiver.save()
                     # Transfer items to killer
                     for item in self.murderee.item_set.all():
                         # Discard item if used
@@ -614,7 +649,20 @@ class Death(models.Model):
                             self.murderer.notify(
                                 "Upon killing %s, you received their %s" % (self.murderee, item.get_name()), bad=False)
                             item.save()
-
+                if self.murderer.is_mafia_don():
+                    # TODO conscripted vigilante mayor loses don powers
+                    don_kills = Death.objects.filter(murderee__game=self.murderee.game, made_by_don=True,
+                                                     murderer=self.murderer).order_by('-when')
+                    mafia_kills = Death.objects.filter(Q(murderer__role__name="Mafia") | Q(murderer__conscripted=True),
+                                                       murderee__game=self.murderer.game).order_by('-when')
+                    if don_kills.exists() and mafia_kills.exists() and don_kills[0] == mafia_kills[0]:
+                        self.murderer.elected_roles.remove(ElectedRole.objects.get(name="Don"))
+                        self.murderer.notify("You made 2 kills in a row, so you're no longer the mafia don.")
+                        self.murderer.game.log(
+                            "%s made 2 kills in a row and has lost the power of being mafia don." % self.murderer,
+                            mafia_can_see=True)
+                        self.murderer.save()
+                    self.made_by_don = True
         super(Death, self).save(*args, **kwargs)
 
     def __str__(self):
@@ -630,6 +678,8 @@ class Death(models.Model):
             return True
         elif (not CLUES_IN_USE) and MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS,
                                                               target=self.murderee).exists():
+            return False
+        elif self.made_by_don:
             return False
         return True
 
@@ -720,6 +770,8 @@ class Item(models.Model):
     MICROPHONE = "MI"
     RECEIVER = "RE"
     MEDKIT = "ME"
+    CCTV = "TV"
+    CAMERA = "CM"
 
     ITEM_TYPE = (
         (TASER, "Taser"),
@@ -727,6 +779,8 @@ class Item(models.Model):
         (MEDKIT, "Medkit"),
         (MICROPHONE, "Microphone"),
         (RECEIVER, "Receiver"),
+        (CCTV, "CCTV"),
+        (CAMERA, "Camera"),
     )
 
     game = models.ForeignKey(Game)
@@ -738,9 +792,9 @@ class Item(models.Model):
     result = models.TextField(null=True, blank=True)
 
     def get_password(self):
-        if not hasattr(self, "secret"):
-            self.secret = "".join(random.choice("1234567890QWERTYUIOPASDFGHJKLZXCVBNM") for i in range(6))
-        return self.secret
+        # password depends on item, game, and owner
+        random.seed((self.type, self.number, self.owner_id, self.game_id))
+        return "".join(random.choice("1234567890QWERTYUIPASDFGHJKLZXCVBNM") for i in xrange(3))
 
     password = property(get_password)
 
@@ -759,31 +813,34 @@ class Item(models.Model):
         return "????? (Item)"
 
     def can_use_via_form(self):
-        return self.type == Item.SHOVEL or self.type == Item.MEDKIT or self.type == Item.TASER
+        return self.type == Item.SHOVEL or self.type == Item.MEDKIT or self.type == Item.TASER or self.type == Item.CAMERA
 
     def use(self, target=None):
+        self.used = datetime.now()
+
         if self.type == Item.SHOVEL and not target.is_alive():
             self.result = target.death.get_shovel_text()
             self.game.log(message="%s shoveled %s with Shovel %d and got a result of %s." % (
                 self.owner, target, self.number, self.result),
                           users_who_can_see=[self.owner])
-            self.used = datetime.now()
             self.target = target
             self.save()
             return self.result
         elif self.type == Item.MEDKIT:
             self.game.log(message="%s activated Medkit %d." % (self.owner, self.number), users_who_can_see=[self.owner])
-            self.used = datetime.now()
-            self.save()
-            return None
         elif self.type == Item.TASER:
-            # TODO Make taser actually prevent killing
-
             self.game.log(message="%s tased %s with Taser %d." % (self.owner, target, self.number),
                           users_who_can_see=[self.owner, target])
-            self.used = datetime.now()
-            self.save()
-            return None
+        elif self.type == Item.CAMERA:
+            self.game.log(message="%s placed Camera %d in location \"%s\"" % (self.owner, self.number, target),
+                          users_who_can_see=[self.owner])
+            self.owner.notify("Because cameras cannot automatically notify CCTV holders (locations have many names),"
+                              " please PM god(s) with the location of your camera.", bad=False)
+            self.result = target
+            cctv = Item.objects.get(type=Item.CCTV, number=self.number, game=self.game)
+            cctv.owner.notify("Your CCTV's camera was placed at %s") % target
+        self.save()
+        return None
 
     def get_use_form(self):
         from forms import ItemUseForm
@@ -797,6 +854,20 @@ class Item(models.Model):
             return "Report use of taser"
         elif self.type == Item.SHOVEL:
             return "Shovel"
+        elif self.type == Item.CAMERA:
+            return "Report camera placement"
+
+    def get_result_text(self):
+        if self.type == Item.MEDKIT:
+            return self.used.strftime("Used medkit at %H:%M on %B %d")
+        elif self.type == Item.TASER:
+            return "Tased %s %s" % (self.target, self.used.strftime("at %H:%M on %B %d"))
+        elif self.type == Item.SHOVEL:
+            return "Shoveled %s. Result: %s" % (self.target, self.result)
+        elif self.type == Item.CAMERA:
+            return "Camera placed at location \"%s\"" % self.result
+        elif self.type == Item.CCTV:
+            return self.result
 
 
 class MafiaPower(models.Model):

@@ -33,12 +33,12 @@ class MafiaPowerInline(admin.TabularInline):
     extra = 0
 
 class GameAdmin(admin.ModelAdmin):
-    def advance_day(self, request, queryset):
-        for g in queryset:
-            g.increment_day()
-        self.message_user(request, "Activated game(s) successfully")
-
-    advance_day.short_description = "Activate game"
+    # def advance_day(self, request, queryset):
+    #     for g in queryset:
+    #         g.increment_day()
+    #     self.message_user(request, "Activated game(s) successfully")
+    #
+    # advance_day.short_description = "Activate game"
 
     def archive_games(self, request, queryset):
         for g in queryset:
@@ -49,24 +49,24 @@ class GameAdmin(admin.ModelAdmin):
 
     archive_games.short_description = "Archive selected games"
 
-    def pair_gay_knights(self, request, queryset):
-        for g in queryset:
-            gay_knights = Player.objects.filter(
-                role__name__iexact='gay knight',
-                game=g)
-            unpaired_gay_knights = list(g for g in gay_knights if not g.gn_partner)
-            shuffle(unpaired_gay_knights)
-            for i in xrange(len(unpaired_gay_knights) / 2):
-                GayKnightPair.objects.create(player1=unpaired_gay_knights[i * 2],
-                                             player2=unpaired_gay_knights[i * 2 + 1])
-        self.message_user(request, "Successfully paired up GNs.")
+    # def pair_gay_knights(self, request, queryset):
+    #     for g in queryset:
+    #         gay_knights = Player.objects.filter(
+    #             role__name__iexact='gay knight',
+    #             game=g)
+    #         unpaired_gay_knights = list(g for g in gay_knights if not g.gn_partner)
+    #         shuffle(unpaired_gay_knights)
+    #         for i in xrange(len(unpaired_gay_knights) / 2):
+    #             GayKnightPair.objects.create(player1=unpaired_gay_knights[i * 2],
+    #                                          player2=unpaired_gay_knights[i * 2 + 1])
+    #     self.message_user(request, "Successfully paired up GNs.")
 
-    pair_gay_knights.short_description = "Pair up gay knights"
+    # pair_gay_knights.short_description = "Pair up gay knights"
 
-    list_display = ('name', 'active', 'number_of_players', 'number_of_living_players')
-    exclude = ('active', 'archived', 'current_day', 'mafia_counts')
+    list_display = ('name', 'active', 'archived', 'number_of_players', 'number_of_living_players')
+    exclude = ('active', 'archived', 'current_day', 'mafia_counts', 'today_start')
     inlines = (PlayerInline, MafiaPowerInline)
-    actions = [advance_day, archive_games, pair_gay_knights]
+    actions = [archive_games]
 
 
 admin.site.register(Game, GameAdmin)

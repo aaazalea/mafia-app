@@ -20,7 +20,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
@@ -40,8 +40,9 @@ def notifier(function):
                     messages.info(request, message.content)
             if request.user.is_impersonate:
                 messages.info(request,
-                              "You are impersonating right now. <a class='alert-link' href='%s'>Click here to stop.</a> " % reverse(
-                                  'impersonate-stop'))
+                              "You are impersonating right now. "
+                              "<a class='alert-link' href='%s?next=%s'>Click here to stop.</a> " %
+                              (reverse('impersonate-stop'), reverse('player_intros')))
         return function(request, *args, **kwargs)
 
     return new_func
@@ -204,7 +205,7 @@ def kill_report(request):
             try:
                 Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
                                      day=Game.objects.get(active=True).current_day, where=where)
-            except IndexError:
+            except IndexError, e:
                 player = Player.objects.get(user=request.user, game__active=True)
                 messages.error(request,
                                "This kill is illegal (perhaps mafia have killed already"
@@ -396,15 +397,18 @@ def items(request):
     if request.POST:
         form = Form(request.POST)
         if form.is_valid():
-            if 'target' in form.data:
-                target = Player.objects.get(id=form.data['target'])
-                item = Item.objects.get(id=form.data['item'])
-                messages.info(request, "item used: %s. Target: %s" % (item, target))
-                item.use(target)
-            else:
-                item = Item.objects.get(id=form.data['item'])
-                messages.info(request, "item used successfully: %s." % item)
-                item.use()
+            item_to_use = Item.objects.get(id=form.data['item'])
+            if not item_to_use.used:
+                if 'target' in form.data:
+                    try:
+                        target = Player.objects.get(id=form.data['target'])
+                    except ValueError:
+                        target = form.data['target']
+                    messages.info(request, "Item used: %s. Target: %s" % (item_to_use, target))
+                    item_to_use.use(target)
+                else:
+                    messages.info(request, "Item used successfully: %s." % item_to_use)
+                    item_to_use.use()
 
     game = Game.objects.get(active=True)
     if request.user == game.god:
@@ -420,50 +424,52 @@ def items(request):
         return HttpResponseRedirect(reverse('logs'))
 
 
-@notifier
 @login_required
 def destroy_item(request, id):
     current_item = Item.objects.get(id=id)
     player = Player.objects.get(user=request.user, game__active=True)
     if current_item.owner != player:
         messages.add_message(request, messages.WARNING, "That item does not belong to you.")
-        return HttpResponseRedirect("/")
-    current_item.owner = None
-    player.game.log(message="%s has destroyed %s" % (player, current_item.get_name()), users_who_can_see=[player])
-    current_item.save()
+    else:
+        current_item.owner = None
+        player.game.log(message="%s has destroyed %s" % (player, current_item.get_name()), users_who_can_see=[player])
+        current_item.save()
     return HttpResponseRedirect(reverse('items'))
 
 
 @notifier
 @login_required
-def item(request, item_id, password):
+def transfer_item(request, item_id, password):
     current_item = Item.objects.get(id=item_id)
-    if current_item.password != password:
+    if current_item.password != password or current_item.used or not current_item.owner:
         return HttpResponseNotFound
     else:
         player = Player.objects.get(user=request.user, game__active=True)
         if player != current_item.owner:
             old_owner = current_item.owner
             current_item.owner = player
+            current_item.save()
             messages.add_message(request, messages.SUCCESS,
-                                 "You have successfully acquired <b>%s</b> from <b>%s</b>. <a href='/'>Return.</a>" % (
+                                 "You have successfully acquired <b>%s</b> from <b>%s</b>." % (
                                      current_item.name, old_owner.username))
+            return HttpResponseRedirect(reverse('items'))
 
-        # using the item
-        return HttpResponse("Using items is not yet implemented.")
+        else:
+            return render(request, "transfer_item.html", {'item': current_item, 'player': player})
 
 
 @notifier
 @login_required
 def count_the_mafia(request):
-    if Game.get(active=True).mafia_counts == MAYOR_COUNT_MAFIA_TIMES:
+    if Game.objects.get(active=True).mafia_counts == MAYOR_COUNT_MAFIA_TIMES:
         messages.warning(request, "All mafia counts have been used.")
     try:
         player = Player.objects.get(user=request.user, game__active=True)
         if player.elected_roles.filter(name="Mayor").exists():
             mafia_count = sum(p.is_evil() for p in player.game.living_players)
             messages.info(request, "There are <b>%d</b> mafia remaining." % mafia_count)
-            player.game.log("Mayor %s has counted the mafia and found that %d remain." % (player, mafia_count))
+            player.game.log("Mayor %s has counted the mafia and found that %d remain." % (player, mafia_count),
+                            users_who_can_see=[player])
             player.game.mafia_counts += 1
             player.game.save()
     except Player.DoesNotExist:
@@ -642,7 +648,7 @@ def end_game(request):
         game.archived = True
         game.save()
         messages.info(request, "Game ended successfully")
-        for player in game.player_set:
+        for player in game.player_set.all():
             player.notify("Game has ended - check forums to see who won.", bad=False)
     return HttpResponseRedirect("/")
 
@@ -859,6 +865,10 @@ def configure_game(request):
                 count_mics = count
             elif it[0] == Item.RECEIVER:
                 count_recs = count
+            elif it[0] == Item.CCTV:
+                count_cctvs = count
+            elif it[0] == Item.CAMERA:
+                count_cams = count
 
             if count < 0:
                 messages.error(request, "There is a negative number of %ss" % it[1])
@@ -866,6 +876,10 @@ def configure_game(request):
 
         if count_mics != count_recs:
             messages.error(request, "There should be the same number of microphones as receivers.")
+            err = True
+
+        if count_cams != count_cctvs:
+            messages.error(request, "There should be the same number of cameras as CCTVs.")
             err = True
 
         if not err:
@@ -898,10 +912,8 @@ def election(request):
         player_elected = Player.objects.get(id=form.data['player_elected'])
         game = player_elected.game
         position = ElectedRole.objects.get(id=form.data['position'])
-        player_elected.elected_roles.add(position)
-        player_elected.save()
-        game.log(anonymous_message="%s was elected to the position of %s." % (player_elected, position))
-        player_elected.notify("You've been elected as the new %s" % position, bad=False)
+        player_elected.elect(position)
+
         return HttpResponseRedirect(reverse('logs'))
     else:
         game = request.user.game_set.get(active=True)
@@ -915,9 +927,7 @@ def election(request):
 def impeach(request, player_id, electedrole_id):
     player = Player.objects.get(id=player_id)
     position = ElectedRole.objects.get(id=electedrole_id)
-    player.elected_roles.remove(position)
-    player.notify("You've been impeached! You're no longer the %s." % position)
-    player.game.log(anonymous_message="%s is has been impeached from being %s" % (player, position))
+    player.impeach(position)
     return HttpResponseRedirect(reverse('logs'))
 
 
@@ -965,3 +975,27 @@ def hitman_success(request):
         form = HitmanSuccessForm()
         return render(request, 'form.html', {'form': form, 'player': player, 'url': reverse('forms:hitman_success'),
                                              'title': 'Report a Hitman Kill'})
+
+
+@login_required
+def cctv_death_form(request):
+    try:
+        game = Game.objects.get(active=True, archived=False, god=request.user)
+    except Game.DoesNotExist:
+        return HttpResponseRedirect("/")
+    form = CCTVDeathForm(request.POST or None)
+    if form.is_valid():
+        cctv = Item.objects.get(id=form.data['cctv'])
+        death = Death.objects.get(id=form.data['death'])
+        if death.kaboom:
+            cctv.owner.notify("Your CCTV has mysteriously gone blank. Perhaps this was caused by an explosion.")
+            cctv.result = "Screen gone black"
+            cctv.save()
+        else:
+            cctv.owner.notify(
+                "You see something on your TV screen. It's a murder! %s killed %s." % (death.murderer, death.murderee))
+        return HttpResponseRedirect("/")
+
+    return render(request, 'form.html',
+                  {'form': form, 'user': request.user, 'game': game, 'url': reverse('forms:cctv_death'),
+                   'title': 'Notify CCTV Owner'})
