@@ -1,4 +1,5 @@
 import random
+import math
 
 from django import forms
 from django.core.urlresolvers import reverse
@@ -6,8 +7,9 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
-    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT
+    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE
 from django.utils.datetime_safe import datetime
+
 
 NO_LYNCH = "No lynch"
 
@@ -216,9 +218,10 @@ class Player(models.Model):
             else:
                 return "Used up kill"
         elif self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
-            list1 = ", ".join(self.conspiracylist_set.get_or_create(day=self.game.current_day)[0].conspired.all())
+            list1 = ", ".join(
+                p.username for p in self.conspiracylist_set.get_or_create(day=self.game.current_day)[0].conspired.all())
             if list1:
-                return "Conspiracy list: %s" % list1
+                return "Conspiracy list: [%s]" % list1
             else:
                 return "No conspiracy list"
         elif self.role == Role.objects.get(name="Superhero"):
@@ -301,7 +304,11 @@ class Player(models.Model):
             if tomorrow.exists():
                 tomorrow = tomorrow[0]
             else:
-                tomorrow = today
+                # make a copy of today
+                tomorrow = ConspiracyList.objects.get(id=today.id)
+                tomorrow.id = None
+                tomorrow.day += 1
+                tomorrow.save()
             tablify = lambda consp: ''.join(
                 '<td>%s</td>' % d.username for d in
                 consp.conspired.all()) if consp.conspired.exists() else "<td>(empty)</td>"
@@ -310,8 +317,11 @@ class Player(models.Model):
                        tablify(today), tablify(tomorrow))
         elif self.role == Role.objects.get(name="Superhero"):
             superhero_day = SuperheroDay.objects.get(owner=self, day=self.game.current_day)
-            sup_yesterday = SuperheroDay.objects.get(owner=self, day=self.game.current_day - 1)
-            if sup_yesterday.paranoia_successful():
+            try:
+                sup_yesterday = SuperheroDay.objects.get(owner=self, day=self.game.current_day - 1)
+            except SuperheroDay.DoesNotExist:
+                sup_yesterday = None
+            if sup_yesterday and sup_yesterday.paranoia_successful():
                 a = "Immune today by paranoia. "
             else:
                 a = ""
@@ -334,6 +344,32 @@ class Player(models.Model):
     in_superhero_identity = property(
         lambda self: self.superheroday_set.filter(day=self.game.current_day).exists() and self.superheroday_set.get(
             day=self.game.current_day).superhero_identity)
+
+    def killable_by_bang(self, killer=None):
+        role_name = self.role.name
+        if role_name == "Desperado":
+            if self.role_information > Player.DESPERADO_ACTIVATING:
+                return True
+        elif role_name == "Gay Knight":
+            if killer and self.gn_partner == killer and self.investigation_set.filter(guess=killer).exists():
+                return True
+        elif role_name == 'Superhero':
+            try:
+                sup_yesterday = SuperheroDay.objects.get(owner=self, day=self.game.current_day - 1)
+            except SuperheroDay.DoesNotExist:
+                sup_yesterday = None
+            if sup_yesterday and sup_yesterday.paranoia_successful():
+                return True
+        elif role_name == "Conspiracy Theorist":
+            if killer:
+                if self.conspiracylist_set.get(day=self.game.current_day, conspired=killer):
+                    return True
+
+        if Item.objects.filter(used__gt=self.game.today_start, type=Item.MEDKIT, owner=self):
+            return True
+
+        return False
+
 
     def has_clues_to_investigate(self, target):
         # TODO implement clues
@@ -470,10 +506,9 @@ class Player(models.Model):
             consp_list = self.conspiracylist_set.get(day=self.game.current_day + 1)
             count_dead = 0
             if CONSPIRACY_LIST_SIZE_IS_PERCENT:
-                list_size = self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE
+                list_size = math.ceil(self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE)
             else:
                 list_size = CONSPIRACY_LIST_SIZE
-
 
             conspiratees = list(consp_list.conspired.all())
 
@@ -491,7 +526,6 @@ class Player(models.Model):
                     count_dead += 1
 
             consp_list.save()
-
 
         self.save()
 
@@ -604,14 +638,25 @@ class Death(models.Model):
                     name__iexact="Police officer").exists())):
                 if self.murderer and not self.murderer.is_evil():
                     raise Exception("Non-mafia attempt to use a kaboom without being police officer")
-                kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE,
-                                                    game__active=True)
-                kaboom = kabooms[0]
-                kaboom.target = self.murderee
-                kaboom.day_used = self.murderee.game.current_day
-                kaboom.state = MafiaPower.USED
-                kaboom.user = self.murderer
-                kaboom.save()
+
+                if (not KABOOMS_REGENERATE) or (
+                    self.murderee.killable_by_bang(self.murderer) and not Item.objects.filter(owner=self.murderee,
+                                                                                              type=Item.MICROPHONE,
+                                                                                              used__isnull=True).exists()):
+                    kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE,
+                                                        game__active=True)
+                    kaboom = kabooms[0]
+                    kaboom.target = self.murderee
+                    kaboom.day_used = self.murderee.game.current_day
+                    kaboom.state = MafiaPower.USED
+                    kaboom.user = self.murderer
+                    kaboom.save()
+                elif KABOOMS_REGENERATE:
+                    if not MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE,
+                                                     game__active=True).exists():
+                        raise IndexError("No kabooms")
+                    self.murderee.game.log("Kaboom regenerated on kill of %s." % self.murderee, mafia_can_see=True)
+                    self.murderer.notify("Kaboom regenerated on kill of %s" % self.murderee, bad=False)
             scheme = None
             if (not self.free) and Death.objects.filter(day=self.day, free=False,
                                                         murderee__game=self.murderee.game).exists():
