@@ -12,7 +12,7 @@
             {% if god %}
                 <th>By whom</th>
             {% endif %}
-            <th>Clues</th>
+            <th colspan="2">Clues</th>
         </tr>
         {% for death in deaths %}
             <tr>
@@ -22,21 +22,21 @@
                 {% if god %}
                     <td>{{ death.murderer.user.username }}</td>
                 {% endif %}
-                {# TODO collecting and viewing clues #}
                 <td>
-                    {% for clue_pile in clue_piles %}
+                    {% for clue_pile in player.clues_found.all %}
                         {% if clue_pile.target == death.murderee %}
                             {{ clue_pile.local_text }}
                         {% endif %}
                     {% endfor %}
                 </td>
-                    {% if death in gatherables %}
-                        <td><a href="{% url 'collect_clues' death.id %}" class="btn btn-default">Check for Clues</a></td>
-                    {% endif %}
-                </td>
-                {% if can_destroy and death in destructibles %}
-                    <td><a href="{% url 'destroy_clue' death.id %}" class="btn btn-default">Destroy a Clue</a></td>
+                <td>
+                {% if death in gatherables %}
+                    <a href="{% url 'collect_clues' death.id %}" class="btn btn-default">Check for Clues</a>
                 {% endif %}
+                {% if death in destructibles %}
+                    <a href="{% url 'destroy_clue' death.id %}" class="btn btn-default">Destroy a Clue</a>
+                {% endif %}
+                </td>
             </tr>
         {% endfor %}
     </table>

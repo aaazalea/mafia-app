@@ -7,7 +7,6 @@ import accounts_urls
 from settings import PRODUCTION
 
 urlpatterns = patterns('',
-                       # Examples:
                        url(r'^$', 'mafia.views.index', name='index'),
                        url(r'^recent-deaths/$', 'mafia.views.recent_deaths', name='recent_deaths'),
                        url(r'^your-role/$', 'mafia.views.your_role', name='your_role'),

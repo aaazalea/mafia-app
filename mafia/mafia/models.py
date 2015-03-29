@@ -8,7 +8,6 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE
-from django.utils.datetime_safe import datetime
 from django.utils.timezone import now
 
 
@@ -33,12 +32,6 @@ class Game(models.Model):
                                           mafia_can_view=mafia_can_see)
         else:
             item = LogItem.objects.create(text=message, mafia_can_view=mafia_can_see, game=self)
-        for user in users_who_can_see:
-            item.users_can_view.add(user)
-        item.save()
-
-    def log_notification(self, message=None, users_who_can_see=[]):
-        item = LogItem.objects.create(text=message, mafia_can_view=False, game=self, show_all=False)
         for user in users_who_can_see:
             item.users_can_view.add(user)
         item.save()
@@ -90,12 +83,12 @@ class Game(models.Model):
                 hitman.state = MafiaPower.USED
                 hitman.save()
 
-        self.today_start = datetime.now()
+        self.today_start = now()
         self.save()
 
 
     def kill_day_end(self, player, why, log_message=True):
-        Death.objects.create(murderee=player, when=datetime.now(), where=why, day=self.current_day)
+        Death.objects.create(murderee=player, when=now(), where=why, day=self.current_day)
         if log_message:
             self.log(anonymous_message="%s dies of %s (end day %d)" % (player, why, self.current_day))
 
@@ -196,6 +189,16 @@ class Player(models.Model):
         return True
 
     alive = property(is_alive)
+
+    def log(self, message):
+        item = LogItem.objects.create(text=message, game=self.game)
+        item.users_can_view.add(self)
+        item.save()
+
+    def log_notification(self, message=None):
+        item = LogItem.objects.create(text=message, game=self.game, show_all=False)
+        item.users_can_view.add(self)
+        item.save()
 
     def get_extra_info_for_dead_people(self):
         if not self.is_alive():
@@ -363,7 +366,7 @@ class Player(models.Model):
                 return True
         elif role_name == "Conspiracy Theorist":
             if killer:
-                if self.conspiracylist_set.get(day=self.game.current_day, conspired=killer):
+                if self.conspiracylist_set.filter(day=self.game.current_day, conspired=killer).exists():
                     return True
 
         if Item.objects.filter(used__gt=self.game.today_start, type=Item.MEDKIT, owner=self):
@@ -452,7 +455,7 @@ class Player(models.Model):
 
     def can_destroy_clue(self, death=None):
         return (self.is_evil() or self.role == Role.objects.get(name__iexact="Rogue")) and (
-        not death or (not self in death.clue_destroyers.all()) and death.total_clues > 0)
+            not death or (not self in death.clue_destroyers.all()) and death.total_clues > 0)
 
     def can_make_kills(self):
         if Item.objects.filter(used__gt=self.game.today_start, type=Item.TASER, target=self).exists():
@@ -531,29 +534,32 @@ class Player(models.Model):
                 self.notify("You've been poisoned! You die at day end on day %d" % (poison.day_used + 2))
 
         if self.role == Role.objects.get(name="Conspiracy Theorist"):
-            consp_list = self.conspiracylist_set.get(day=self.game.current_day + 1)
-            count_dead = 0
-            if CONSPIRACY_LIST_SIZE_IS_PERCENT:
-                list_size = math.ceil(self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE)
-            else:
-                list_size = CONSPIRACY_LIST_SIZE
+            try:
+                consp_list = self.conspiracylist_set.get(day=self.game.current_day + 1)
+                count_dead = 0
+                if CONSPIRACY_LIST_SIZE_IS_PERCENT:
+                    list_size = math.ceil(self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE)
+                else:
+                    list_size = CONSPIRACY_LIST_SIZE
 
-            conspiratees = list(consp_list.conspired.all())
+                conspiratees = list(consp_list.conspired.all())
 
-            if list_size < len(conspiratees):
-                consp_list.conspired.remove(consp_list.drop)
-                backups = [consp_list.drop, consp_list.backup1, consp_list.backup2, consp_list.backup3]
-            else:
-                backups = [consp_list.backup1, consp_list.backup2, consp_list.backup3]
+                if list_size < len(conspiratees):
+                    consp_list.conspired.remove(consp_list.drop)
+                    backups = [consp_list.drop, consp_list.backup1, consp_list.backup2, consp_list.backup3]
+                else:
+                    backups = [consp_list.backup1, consp_list.backup2, consp_list.backup3]
 
-            for conspiratee in conspiratees:
-                if not conspiratee.is_alive():
-                    consp_list.conspired.remove(conspiratee)
-                    if count_dead < len(backups):
-                        consp_list.conspired.add(backups[count_dead])
-                    count_dead += 1
+                for conspiratee in conspiratees:
+                    if not conspiratee.is_alive():
+                        consp_list.conspired.remove(conspiratee)
+                        if count_dead < len(backups):
+                            consp_list.conspired.add(backups[count_dead])
+                        count_dead += 1
 
-            consp_list.save()
+                consp_list.save()
+            except ConspiracyList.DoesNotExist:
+                self.conspiracylist_set.create(day=self.game.current_day + 1)
 
         self.save()
 
@@ -592,6 +598,14 @@ class Player(models.Model):
             links.append((reverse('forms:superhero'), "Choose identity"))
         if self.elected_roles.filter(name="Mayor").exists() and self.game.mafia_counts < MAYOR_COUNT_MAFIA_TIMES:
             links.append((reverse('count_the_mafia'), "Count the Mafia"))
+        if self.can_collect_clues() or self.can_destroy_clue():
+            links.append((reverse('recent_deaths'), "Collect or Destroy Clues"))
+        if self.elected_roles.filter(name="Police Officer").exists():
+            if (now() - self.game.today_start).seconds < 3600:
+                links.append(
+                    (reverse("forms:watchlist", kwargs={'day': self.game.current_day}), "Update today's watchlist"))
+            links.append(
+                (reverse("forms:watchlist", kwargs={'day': self.game.current_day + 1}), "Update tomorrow's watchlist"))
         return links
 
     def get_unread_notifications(self):
@@ -602,7 +616,7 @@ class Player(models.Model):
 
     def notify(self, message, bad=True):
         Notification.objects.create(user=self.user, game=self.game, seen=False, content=message, is_bad=bad)
-        self.game.log_notification(message="Notification for %s: '%s'" % (self, message), users_who_can_see=[self])
+        self.log_notification(message="Notification for %s: '%s'" % (self, message))
 
     def impeach(self, position):
         self.elected_roles.remove(position)
@@ -672,9 +686,10 @@ class Death(models.Model):
                     raise Exception("Non-mafia attempt to use a kaboom without being police officer")
 
                 if (not KABOOMS_REGENERATE) or (
-                    self.murderee.killable_by_bang(self.murderer) and not Item.objects.filter(owner=self.murderee,
-                                                                                              type=Item.MICROPHONE,
-                                                                                              used__isnull=True).exists()):
+                            self.murderee.killable_by_bang(self.murderer) and not Item.objects.filter(
+                                owner=self.murderee,
+                                type=Item.MICROPHONE,
+                                used__isnull=True).exists()):
                     kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE,
                                                         game__active=True)
                     kaboom = kabooms[0]
@@ -721,9 +736,8 @@ class Death(models.Model):
                         # Discard items
                         item.owner = None
                         item.save()
-                        self.murderee.game.log(message="%s, which %s was holding, was destroyed by KABOOM!" %
-                                                       (item.get_name(), self.murderee),
-                                               users_who_can_see=[self.murderee])
+                        self.murderee.log(message="%s, which %s was holding, was destroyed by KABOOM!" %
+                                                  (item.get_name(), self.murderee))
                 else:
                     if not self.murderer.is_mafia_don():
                         for mic in microphones:
@@ -734,9 +748,8 @@ class Death(models.Model):
                             mic.save()
                             if Item.objects.filter(type=Item.RECEIVER, number=number, owner__isnull=False).exists():
                                 receiver = Item.objects.get(type=Item.RECEIVER, number=number, game=self.murderee.game)
-                                self.murderee.game.log(message="%s has heard from Receiver %d that %s killed %s." % (
-                                    receiver.owner, number, self.murderer, self.murderee),
-                                                       users_who_can_see=[receiver.owner])
+                                receiver.owner.log(message="%s has heard from Receiver %d that %s killed %s." % (
+                                    receiver.owner, number, self.murderer, self.murderee))
                                 receiver.owner.notify("You hear something from Receiver %d! %s killed %s!" % (
                                     number, self.murderer, self.murderee))
                                 receiver.used = self.when
@@ -759,7 +772,7 @@ class Death(models.Model):
                             item.save()
 
                 if self.murderer.is_mafia_don():
-                    # TODO conscripted vigilante mayor loses don powers
+                    # TODO conscripted vigilante mayor loses don powers with civilian killings
                     don_kills = Death.objects.filter(murderee__game=self.murderee.game, made_by_don=True,
                                                      murderer=self.murderer).order_by('-when')
                     mafia_kills = Death.objects.filter(Q(murderer__role__name="Mafia") | Q(murderer__conscripted=True),
@@ -780,6 +793,12 @@ class Death(models.Model):
                         self.total_clues = 1 + sum(
                             p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
                             self.murderee.game.living_players)
+
+                    for watchlist in self.murderer.watched_by.filter(day=self.murderer.game.current_day):
+                        self.update_clue_pile(watchlist.owner, watchlist=True)
+                        watchlist.owner.notify("You gain 3 clues from the death of %s" % self.murderee)
+                        watchlist.owner.log("%s gains 3 clues from the death of %s" % self.murderee)
+
             elif CLUES_IN_USE:
                 self.total_clues = 0
 
@@ -791,38 +810,26 @@ class Death(models.Model):
         self.save()
 
     def update_clue_pile(self, investigator, watchlist=False):
-        current_pile = CluePile.objects.filter(investigator=investigator, target=self.murderee)
-        if current_pile.exists():
-            pile = current_pile[0]
-            if watchlist:
+        pile, created = CluePile.objects.get_or_create(investigator=investigator, target=self.murderee)
+
+        if watchlist:
+            if created:
+                pile.clues = 3
+            else:  # collected is True
                 pile.size += 3  # TODO is watchlist clue size constant? Anyway, put log for this elsewhere.
-                pile.save()
-            elif not current_pile[0].collected:
-                pile.initial_size = self.total_clues
-                pile.size += self.total_clues
-                pile.collected = True
-                pile.last_checked = datetime.now()
-                pile.save()
-                investigator.game.log(message="%s searched %s's kill site and found %d clues." % (
-                    investigator, self.murderee, self.total_clues),
-                                      users_who_can_see=[investigator])
-            else:
-                investigator.game.log(message="%s looked back over %s's kill site and found %d clues." % (
-                    investigator, self.murderee, self.total_clues),
-                                      users_who_can_see=[investigator])
-                pile.last_checked = datetime.now()
-                pile.save()
-        elif watchlist:
-            pile = CluePile.objects.create(investigator=investigator, target=self.murderee, collected=False, size=3)
-            pile.save()
+        elif pile.collected:
+            investigator.log(message="%s looked back over %s's kill site and found %d clues." % (
+                investigator, self.murderee, self.total_clues))
+            pile.last_checked = now()
         else:
-            pile = CluePile.objects.create(investigator=investigator, target=self.murderee,
-                                           initial_size=self.total_clues, size=self.total_clues,
-                                           last_checked=datetime.now())
-            pile.save()
-            investigator.game.log(message="%s searched %s's kill site and found %d clues." % (
-                investigator, self.murderee, self.total_clues),
-                                  users_who_can_see=[investigator])
+            pile.initial_size = self.total_clues
+            pile.size += self.total_clues
+            pile.collected = True
+            pile.last_checked = now()
+            investigator.log(message="%s searched %s's kill site and found %d clues." % (
+                investigator, self.murderee, self.total_clues))
+
+        pile.save()
 
     def __str__(self):
         if self.murderer:
@@ -857,10 +864,13 @@ class Death(models.Model):
 class CluePile(models.Model):
     investigator = models.ForeignKey(Player, related_name='clues_found')
     target = models.ForeignKey(Player, related_name='clues_about')
-    collected = models.BooleanField(default=True)
+    collected = models.BooleanField(default=False)
     initial_size = models.IntegerField(default=0)
     size = models.IntegerField(default=0)
     last_checked = models.DateTimeField(null=True)
+
+    def __str__(self):
+        return "%s's %d clue(s) on %s's death" % (self.investigator, self.size, self.target)
 
     def uncheckable(self):
         # TODO fix time zone awareness issue
@@ -887,7 +897,6 @@ class GayKnightPair(models.Model):
 
 
 class Investigation(models.Model):
-    # TODO Clues
     investigator = models.ForeignKey(Player)
     death = models.ForeignKey(Death)
     day = models.IntegerField()
@@ -1003,7 +1012,7 @@ class Item(models.Model):
         return self.type == Item.SHOVEL or self.type == Item.MEDKIT or self.type == Item.TASER or self.type == Item.CAMERA
 
     def use(self, target=None):
-        self.used = datetime.now()
+        self.used = now()
 
         if self.type == Item.SHOVEL and not target.is_alive():
             self.result = target.death.get_shovel_text()
@@ -1014,13 +1023,12 @@ class Item(models.Model):
             self.save()
             return self.result
         elif self.type == Item.MEDKIT:
-            self.game.log(message="%s activated Medkit %d." % (self.owner, self.number), users_who_can_see=[self.owner])
+            self.owner.log(message="%s activated Medkit %d." % (self.owner, self.number))
         elif self.type == Item.TASER:
             self.game.log(message="%s tased %s with Taser %d." % (self.owner, target, self.number),
                           users_who_can_see=[self.owner, target])
         elif self.type == Item.CAMERA:
-            self.game.log(message="%s placed Camera %d in location \"%s\"" % (self.owner, self.number, target),
-                          users_who_can_see=[self.owner])
+            self.owner.log(message="%s placed Camera %d in location \"%s\"" % (self.owner, self.number, target))
             self.owner.notify("Because cameras cannot automatically notify CCTV holders (locations have many names),"
                               " please PM god(s) with the location of your camera.", bad=False)
             self.result = target
@@ -1189,7 +1197,7 @@ class MafiaPower(models.Model):
                 return "The mafia have failed to set a trap on %s." % self.target
         elif self.power == MafiaPower.SLAUGHTER_THE_WEAK:
             if self.state == MafiaPower.SET:
-                return "The mafia have successfully slaughter the weak on %s." % self.target
+                return "The mafia have successfully used slaughter the weak on %s." % self.target
             else:
                 return "The mafia have failed to slaughter the weak on %s." % self.target
         elif self.power == MafiaPower.FRAME_A_TOWNSPERSON:
@@ -1282,3 +1290,12 @@ class SuperheroDay(models.Model):
         else:
             return "%s's secret identity (day %d)" % (self.owner, self.day)
 
+
+class WatchList(models.Model):
+    owner = models.ForeignKey(Player)
+    day = models.IntegerField()
+    watched = models.ManyToManyField(Player, related_name="watched_by")
+
+    def __str__(self):
+        return "%s's watch list on day %d: [%s]" % (
+            self.owner, self.day, ", ".join(p.username for p in self.watched.all()) )

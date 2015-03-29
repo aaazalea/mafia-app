@@ -224,3 +224,8 @@ class CCTVDeathForm(forms.Form):
     cctv = CCTVModelChoiceField(Item.objects.filter(type=Item.CCTV, game__active=True), empty_label=None,
                                 label="Which CCTV?")
     death = CCTVDeathModelChoiceField(Death.objects.filter(murderee__game__active=True, murderer__isnull=False))
+
+
+class WatchListForm(forms.Form):
+    day = forms.IntegerField(min_value=1, widget=forms.HiddenInput())
+    watched = forms.ModelMultipleChoiceField(queryset=Player.objects.filter(game__active=True, death__isnull=True))

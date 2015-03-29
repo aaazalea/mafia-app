@@ -13,4 +13,5 @@ urlpatterns = patterns('',
                        url(r'^ic-reveal/$', 'mafia.views.ic_reveal', name='ic_reveal'),
                        url(r'^hitman-success/$', 'mafia.views.hitman_success', name='hitman_success'),
                        url(r'^cctv-report/$', 'mafia.views.cctv_death_form', name='cctv_death'),
+                       url(r'^watchlist/(?P<day>\d+)/$', 'mafia.views.modify_watch_list', name='watchlist')
 )

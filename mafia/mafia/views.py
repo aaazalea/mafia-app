@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from operator import add
 from random import shuffle
 
@@ -11,6 +11,7 @@ from django.forms import Form
 from django.template.response import TemplateResponse
 from django.utils.http import is_safe_url
 from django.shortcuts import resolve_url
+from django.utils.timezone import now
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
@@ -20,7 +21,8 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm
+    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
+    WatchListForm
 from django.shortcuts import render
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
@@ -124,7 +126,7 @@ def death_report(request):
         killer = Player.objects.get(id=form.data['killer'])
         killed = me
 
-        when = datetime.now() - timedelta(minutes=int(form.data['when']))
+        when = now() - timedelta(minutes=int(form.data['when']))
         kaboom = 'kaboom' in form.data
         Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, where=where,
                              day=Game.objects.get(active=True).current_day)
@@ -173,11 +175,9 @@ def superhero_form(request):
                 p = None
             SuperheroDay.objects.create(day=today + 1, paranoia=p, secret_identity=s, owner=me)
         if superhero_identity:
-            me.game.log(
-                "%s has set superhero identity for day %d, with paranoia target %s." % (me, today + 1, paranoia),
-                users_who_can_see=[me])
+            me.log("%s has set superhero identity for day %d, with paranoia target %s." % (me, today + 1, paranoia))
         else:
-            me.game.log("%s has set secret identity for day %d" % (me, today + 1), users_who_can_see=[me])
+            me.log("%s has set secret identity for day %d" % (me, today + 1))
 
         messages.success(request, "Set superhero settings for day %d successfully" % (today + 1))
         return HttpResponseRedirect('/')
@@ -200,7 +200,7 @@ def kill_report(request):
             where = form.data['where']
             killed = Player.objects.get(id=form.data['killed'])
             killer = Player.objects.get(user=request.user, game__active=True)
-            when = datetime.now() - timedelta(minutes=int(form.data['when']))
+            when = now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
             try:
                 Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
@@ -238,7 +238,7 @@ def recent_deaths(request):
     is_god = request.user == game.god
     recents = Death.objects.filter(murderee__game__active=True).order_by('-when', 'murderee')
     can_destroy = False
-    destructibles = None
+    destructibles = []
     clue_piles = None
     gatherables = []
     if isinstance(request.user, AnonymousUser):
@@ -247,9 +247,9 @@ def recent_deaths(request):
     elif game.has_user(request.user):
         player = Player.objects.get(user=request.user, game=game)
         if player.is_alive() and CLUES_IN_USE:
-            can_destroy = player.can_destroy_clue()
-            destructibles = Death.objects.filter(murderee__game__active=True).exclude(clue_destroyers=player)
-            clue_piles = CluePile.objects.filter(investigator=player)
+            if player.is_evil() or player.role.name == "Rogue":
+                destructibles = Death.objects.filter(murderee__game__active=True, total_clues__gt=-1).exclude(
+                    clue_destroyers=player)
             for death in Death.objects.filter(murderee__game__active=True):
                 if player.can_collect_clues(death.murderee):
                     gatherables.append(death)
@@ -258,7 +258,7 @@ def recent_deaths(request):
                   'role': {'name': "God" if is_god else "Guest"}}
     return render(request, 'recent_deaths.html',
                   {'god': is_god, 'deaths': recents, 'player': player, 'gatherables': gatherables,
-                   'clue_piles': clue_piles, 'can_destroy': can_destroy, 'destructibles': destructibles})
+                   'can_destroy': can_destroy, 'destructibles': destructibles})
 
 
 @notifier
@@ -293,9 +293,9 @@ def investigation_form(request):
                 if investigation.uses_clue():
                     pile = CluePile.objects.get(investigator=player, target=death.murderee)
                     pile.use()
-                game.log(message="%s investigates %s for the death of %s (answer: %s)" %
-                                 (player, guess, death.murderee, "Correct" if investigation.is_correct() else "Wrong"),
-                         users_who_can_see=[player])
+                player.log(message="%s investigates %s for the death of %s (answer: %s)" %
+                                   (
+                                   player, guess, death.murderee, "Correct" if investigation.is_correct() else "Wrong"))
                 if investigation.is_correct():
                     messages.add_message(request, messages.SUCCESS, "Correct. <b>%s</b> killed <b>%s</b>."
                                          % (guess.user.username, death.murderee.user.username))
@@ -388,7 +388,7 @@ def lynch_vote(request):
             form = LynchVoteForm(request.POST)
             if form.is_valid():
                 vote_value = Player.objects.get(id=form.data["vote"]) if form.data["vote"] else None
-                vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=datetime.now(),
+                vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=now(),
                                                 day=game.current_day)
                 if vote_value:
                     vote_message = "%s voted to lynch %s" % (player, vote_value)
@@ -399,7 +399,7 @@ def lynch_vote(request):
                     vote.save()
                     vote_message += " (3x vote)"
 
-                game.log(message=vote_message, users_who_can_see=[player])
+                player.log(vote_message)
 
                 return HttpResponseRedirect("/")
         else:
@@ -458,7 +458,8 @@ def collect_clues(request, id):
         messages.add_message(request, messages.ERROR, "You can't collect clues from this death at this time.")
         return HttpResponseRedirect("/")
     death.update_clue_pile(player)
-    messages.add_message(request, messages.SUCCESS, "You searched the kill site and found %d clues." % (death.total_clues))
+    messages.add_message(request, messages.SUCCESS,
+                         "You searched the kill site and found %d clues." % (death.total_clues))
     return HttpResponseRedirect(reverse('recent_deaths'))
 
 
@@ -482,8 +483,7 @@ def destroy_clue(request, id):
         return HttpResponseRedirect(reverse('recent_deaths'))
 
     death.destroy_clue(player)
-    player.game.log(message="%s destroyed a clue at %s's kill site." % (player, death.murderee),
-                    users_who_can_see=[player])
+    player.log(message="%s destroyed a clue at %s's kill site." % (player, death.murderee))
     messages.add_message(request, messages.SUCCESS, "Clue successfully destroyed.")
     death.save()
     return HttpResponseRedirect(reverse('recent_deaths'))
@@ -497,7 +497,7 @@ def destroy_item(request, id):
         messages.add_message(request, messages.WARNING, "That item does not belong to you.")
     else:
         current_item.owner = None
-        player.game.log(message="%s has destroyed %s" % (player, current_item.get_name()), users_who_can_see=[player])
+        player.log(message="%s has destroyed %s" % (player, current_item.get_name()))
         messages.add_message(request, messages.SUCCESS, "Item successfully destroyed.")
         current_item.save()
 
@@ -535,8 +535,7 @@ def count_the_mafia(request):
         if player.elected_roles.filter(name="Mayor").exists():
             mafia_count = sum(p.is_evil() for p in player.game.living_players)
             messages.info(request, "There are <b>%d</b> mafia remaining." % mafia_count)
-            player.game.log("Mayor %s has counted the mafia and found that %d remain." % (player, mafia_count),
-                            users_who_can_see=[player])
+            player.log("Mayor %s has counted the mafia and found that %d remain." % (player, mafia_count))
             player.game.mafia_counts += 1
             player.game.save()
     except Player.DoesNotExist:
@@ -592,7 +591,7 @@ def go_desperado(request):
     player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
     if player.role_information == Player.DESPERADO_INACTIVE:
         player.role_information = Player.DESPERADO_ACTIVATING
-        player.game.log("%s  is going desperado tonight." % player, users_who_can_see=[player])
+        player.log("%s  is going desperado tonight." % player)
         player.save()
     return HttpResponseRedirect("/")
 
@@ -603,7 +602,7 @@ def undo_desperado(request):
     player = Player.objects.get(user=request.user, game__active=True, role__name__iexact="desperado")
     if player.role_information == Player.DESPERADO_ACTIVATING:
         player.role_information = Player.DESPERADO_INACTIVE
-        player.game.log("%s is no longer going desperado tonight." % player, users_who_can_see=[player])
+        player.log("%s is no longer going desperado tonight." % player)
         player.save()
     return HttpResponseRedirect("/")
 
@@ -725,7 +724,7 @@ def evict_player(request, pid):
     game = Game.objects.get(active=True)
     if request.user == game.god:
         player = Player.objects.get(id=pid)
-        Death.objects.create(murderee=player, day=player.game.current_day, when=datetime.now(),
+        Death.objects.create(murderee=player, day=player.game.current_day, when=now(),
                              where="Evicted (day %d)" % player.game.current_day)
         messages.success(request, "%s removed from game" % player.username)
         game.log("%s evicted from game" % player)
@@ -768,15 +767,13 @@ def conspiracy_list_form(request):
             messages.error(request, "Your person-to-drop must be on your list.")
             player = Player.objects.get(user=request.user, game__active=True)
             return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
-                                             'url': reverse('forms:conspiracy_list')})
+                                                 'url': reverse('forms:conspiracy_list')})
         conspiracy.backup1 = Player.objects.get(id=form.data['backup1'])
         conspiracy.backup2 = Player.objects.get(id=form.data['backup2'])
         conspiracy.backup3 = Player.objects.get(id=form.data['backup3'])
         conspiracy.save()
-        player.game.log(
-            message="%s has updated their conspiracy list for day %d to: [%s]" % (player, player.game.current_day + 1,
-                                                                                  ", ".join(consp_list)),
-            users_who_can_see=[player])
+        player.log("%s has updated their conspiracy list for day %d to: [%s]" % (player, player.game.current_day + 1,
+                                                                                 ", ".join(consp_list)))
         messages.success(request, "Conspiracy list updated successfully")
         return HttpResponseRedirect(reverse('your_role'))
     else:
@@ -1036,7 +1033,7 @@ def hitman_success(request):
             where = form.data['where']
             hitman = MafiaPower.objects.get(id=form.data['hitman'])
             killed = hitman.target
-            when = datetime.now() - timedelta(minutes=int(form.data['when']))
+            when = now() - timedelta(minutes=int(form.data['when']))
             kaboom = 'kaboom' in form.data
 
             Death.objects.create(when=when, murderer=None, murderee=killed, kaboom=kaboom,
@@ -1076,3 +1073,40 @@ def cctv_death_form(request):
     return render(request, 'form.html',
                   {'form': form, 'user': request.user, 'game': game, 'url': reverse('forms:cctv_death'),
                    'title': 'Notify CCTV Owner'})
+
+
+@login_required
+@user_passes_test(lambda u: Player.objects.filter(user=u, elected_roles__name="Police Officer", death__isnull=True,
+                                                  game__active=True).exists())
+def modify_watch_list(request, day=None):
+    player = Player.objects.get(user=request.user, game__active=True)
+    if day is None:
+        day = player.game.current_day + 1
+    watchlist = player.watchlist_set.get_or_create(day=day)[0]
+    if request.POST:
+        form = WatchListForm(request.POST)
+        tomorrow = form.data['day'] > player.game.current_day  # could be after tomorrow, this is ok
+        today = form.data['day'] == player.game.current_day and (now() - player.game.today_start).seconds < 3600
+
+        # no idea why this is necessary, but I get strange bugs otherwise.
+        data = dict(form.data)['watched']
+
+        if isinstance(data, unicode):
+            data = [form.data['watched']]
+        if (tomorrow or today) and len(data) <= 3:
+            watchlist.watched.clear()
+            for pid in data:
+                watchlist.watched.add(pid)
+            watchlist.save()
+            messages.success(request, "Watchlist updated.")
+            return HttpResponseRedirect('/')
+        elif len(data) <= 3:
+            messages.error(request, "You can't update that day's watchlist anymore.")
+        else:
+            messages.error(request, "You can only put up to three people on your watchlist.")
+    else:
+        form = WatchListForm(initial={'day': day, 'watched': [watch.id for watch in watchlist.watched.all()]})
+
+    return render(request, 'form.html',
+                  {'form': form, 'player': player, 'url': reverse('forms:watchlist', kwargs={'day': day}),
+                   'title': 'Update your watchlist'})
