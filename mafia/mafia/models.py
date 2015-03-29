@@ -400,8 +400,8 @@ class Player(models.Model):
         super(Player, self).save(*args, **kwargs)
 
     def can_destroy_clue(self, death=None):
-        return ((self.is_evil() or self.role == Role.objects.get(
-            name__iexact="Rogue") and (not death or not self in death.clue_destroyers.all())))
+        return (self.is_evil() or self.role == Role.objects.get(
+            name__iexact="Rogue")) and (not death or not self in death.clue_destroyers.all())
 
     def can_make_kills(self):
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
@@ -639,7 +639,7 @@ class Death(models.Model):
                     else:
                         self.total_clues = 1 + sum(
                             p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
-                            self.game.living_players)
+                            self.murderee.game.living_players)
             elif CLUES_IN_USE:
                 self.total_clues = 0
 

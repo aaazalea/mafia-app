@@ -283,7 +283,10 @@ def investigation_form(request):
                                              guess.user.username, death.murderee.user.username))
                 return HttpResponseRedirect("/")
             else:
-                messages.add_message(request, messages.ERROR, "You can't use that kind of investigation.")
+                if player.can_investigate(form.data['investigation_type']):
+                    messages.add_message(request, messages.ERROR, "You don't have clues for this death.")
+                else:
+                    messages.add_message(request, messages.ERROR, "You can't use that kind of investigation.")
         else:
             messages.add_message(request, messages.ERROR, "Invalid investigation.Please try again.")
     if Player.objects.get(user=request.user, game__active=True).is_alive():
@@ -417,7 +420,12 @@ def items(request):
 
 @notifier
 @login_required
-def destroy_clue(request, death):
+def destroy_clue(request, id):
+    relevant_death = Death.objects.filter(id=id)
+    if not relevant_death.exists():
+        messages.add_message(request, messages.WARNING, "You're trying to destroy a clue from a nonexistent death.")
+        return HttpResponseRedirect("/")
+    death = relevant_death[0]
     player = Player.objects.get(user=request.user, game__active=True)
     if not player.can_destroy_clue():
         messages.add_message(request, messages.WARNING, "You're not evil. You can't destroy clues.")
@@ -426,7 +434,7 @@ def destroy_clue(request, death):
         messages.add_message(request, messages.WARNING, "You've already destroyed a clue here.")
         return HttpResponseRedirect(reverse('recent_deaths'))
     death.destroy_clue(player)
-    player.game.log(message="%s has destroyed a clue at %s's kill site." % (player, death.murderee), users_who_can_see=[player])
+    player.game.log(message="%s destroyed a clue at %s's kill site." % (player, death.murderee), users_who_can_see=[player])
     death.save()
     return HttpResponseRedirect(reverse('recent_deaths'))
 

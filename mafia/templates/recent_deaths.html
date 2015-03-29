@@ -24,7 +24,7 @@
                 {% endif %}
                 # TODO collecting and viewing clues
                 {% if player.can_destroy_clue and death in destructibles %}
-                    <td><a href="{% url 'destroy_clue' death %}" class="btn btn-default">Destroy a Clue</a></td>
+                    <td><a href="{% url 'destroy_clue' death.id %}" class="btn btn-default">Destroy a Clue</a></td>
                 {% endif %}
             </tr>
         {% endfor %}
