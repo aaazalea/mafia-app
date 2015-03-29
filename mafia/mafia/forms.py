@@ -126,6 +126,12 @@ class MafiaPowerForm(forms.Form):
             charge.other_info = 0
         elif charge.power == MafiaPower.CONSCRIPTION:
             charge.target.conscript()
+        elif charge.power == MafiaPower.MANIPULATE_THE_PRESS:
+            a = Death.objects.filter(murderee=charge.target, murderer__isnull=False)
+            if a.exists():
+                death = a[0]
+                death.total_clues = 0
+                death.save()
         charge.save()
 
         charge.target.game.log(message=charge.get_log_message(), mafia_can_see=True)
