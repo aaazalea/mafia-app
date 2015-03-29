@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES
 from django.utils.datetime_safe import datetime
+from django.utils.timezone import now
 
 NO_LYNCH = "No lynch"
 
@@ -328,13 +329,16 @@ class Player(models.Model):
             return False
         if target:
             relevant_clues = CluePile.objects.filter(investigator=self, target=target)
-            if relevant_clues.exists() and relevant_clues[0].collected and relevant_clues[0].last_checked > datetime.now() - datetime.timedelta(hours=1):
+            if relevant_clues.exists() and relevant_clues[0].uncheckable():
+                return False
+            if target.is_alive() or not target.death.murderer:
                 return False
         if self.role == Role.objects.get(name__iexact='investigator'):
             return True
         if self.role == Role.objects.get(name__iexact='superhero'):
             return self.superheroday_set.get(day=self.game.current_day).secret_identity
-        if self.role == Role.objects.get(name__iexact='Desperado') and self.role_information > Player.DESPERADO_ACTIVATING:
+        if self.role == Role.objects.get(
+                name__iexact='Desperado') and self.role_information > Player.DESPERADO_ACTIVATING:
             return True
         return False
 
@@ -369,7 +373,7 @@ class Player(models.Model):
                     (not death) or self.has_clues_to_investigate(death.murderee))
         if self.role == Role.objects.get(name__iexact='Gay knight') and (
                         kind is None or kind == Investigation.GAY_KNIGHT) and \
-                (death is None or Death.murderee == self.gn_partner):
+                (death is None or death.murderee == self.gn_partner):
             if not len(Investigation.objects.filter(investigator=self,
                                                     day=self.game.current_day,
                                                     investigation_type=Investigation.GAY_KNIGHT)) >= \
@@ -400,8 +404,8 @@ class Player(models.Model):
         super(Player, self).save(*args, **kwargs)
 
     def can_destroy_clue(self, death=None):
-        return (self.is_evil() or self.role == Role.objects.get(
-            name__iexact="Rogue")) and (not death or not self in death.clue_destroyers.all())
+        return (self.is_evil() or self.role == Role.objects.get(name__iexact="Rogue")) and (
+        not death or (not self in death.clue_destroyers.all()) and death.total_clues > 0)
 
     def can_make_kills(self):
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
@@ -663,14 +667,26 @@ class Death(models.Model):
                 pile.collected = True
                 pile.last_checked = datetime.now()
                 pile.save()
+                investigator.game.log(message="%s searched %s's kill site and found %d clues." % (
+                    investigator, self.murderee, self.total_clues),
+                                      users_who_can_see=[investigator])
+            else:
+                investigator.game.log(message="%s looked back over %s's kill site and found %d clues." % (
+                    investigator, self.murderee, self.total_clues),
+                                      users_who_can_see=[investigator])
+                pile.last_checked = datetime.now()
+                pile.save()
         elif watchlist:
             pile = CluePile.objects.create(investigator=investigator, target=self.murderee, collected=False, size=3)
             pile.save()
         else:
-            pile = CluePile.objects.create(investigator=investigator, death=self.murderee,
+            pile = CluePile.objects.create(investigator=investigator, target=self.murderee,
                                            initial_size=self.total_clues, size=self.total_clues,
                                            last_checked=datetime.now())
             pile.save()
+            investigator.game.log(message="%s searched %s's kill site and found %d clues." % (
+                investigator, self.murderee, self.total_clues),
+                                  users_who_can_see=[investigator])
 
     def __str__(self):
         if self.murderer:
@@ -707,6 +723,21 @@ class CluePile(models.Model):
     initial_size = models.IntegerField(default=0)
     size = models.IntegerField(default=0)
     last_checked = models.DateTimeField(null=True)
+
+    def uncheckable(self):
+        # TODO fix time zone awareness issue
+        elapsed = now() - self.last_checked
+        return self.collected and elapsed.seconds < 3600
+
+    def local_text(self):
+        if self.collected:
+            return "%d out of %d clues remaining" % (self.size, self.initial_size)
+        else:
+            return "%d Police Officer clues for this site. You have not yet collected clues yourself." % (self.size)
+
+    def use(self):
+        self.size -= 1
+        self.save()
 
 
 class GayKnightPair(models.Model):
@@ -761,6 +792,10 @@ class Investigation(models.Model):
             if kind == self.investigation_type:
                 return name
         return "???????"
+
+    def uses_clue(self):
+        return CLUES_IN_USE and self.investigation_type in [Investigation.INVESTIGATOR, Investigation.SUPERHERO,
+                                                            Investigation.DESPERADO, Investigation.POLICE_OFFICER]
 
 
 class LynchVote(models.Model):

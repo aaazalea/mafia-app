@@ -22,9 +22,9 @@ from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
     ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, ItemUseForm
 from django.shortcuts import render
-from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES
+from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
-    SuperheroDay, GayKnightPair, ElectedRole
+    SuperheroDay, GayKnightPair, ElectedRole, CluePile
 from django.core.urlresolvers import reverse
 
 
@@ -230,17 +230,26 @@ def recent_deaths(request):
     recents = Death.objects.filter(murderee__game__active=True).order_by('-when', 'murderee')
     can_destroy = False
     destructibles = None
+    clue_piles = None
+    gatherables = []
     if isinstance(request.user, AnonymousUser):
         return render(request, 'recent_deaths.html',
                       {'god': is_god, 'deaths': recents, 'game': game, 'user': request.user})
     elif game.has_user(request.user):
         player = Player.objects.get(user=request.user, game=game)
-        can_destroy = player.can_destroy_clue()
-        destructibles = Death.objects.exclude(clue_destroyers=player)
+        if player.is_alive() and CLUES_IN_USE:
+            can_destroy = player.can_destroy_clue()
+            destructibles = Death.objects.filter(murderee__game__active=True).exclude(clue_destroyers=player)
+            clue_piles = CluePile.objects.filter(investigator=player)
+            for death in Death.objects.filter(murderee__game__active=True):
+                if player.can_collect_clues(death.murderee):
+                    gatherables.append(death)
     else:
         player = {'god': is_god, 'game': game, 'username': request.user.username,
                   'role': {'name': "God" if is_god else "Guest"}}
-    return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents, 'player': player, 'can_destroy': can_destroy, 'destructibles': destructibles})
+    return render(request, 'recent_deaths.html',
+                  {'god': is_god, 'deaths': recents, 'player': player, 'gatherables': gatherables,
+                   'clue_piles': clue_piles, 'can_destroy': can_destroy, 'destructibles': destructibles})
 
 
 @notifier
@@ -266,11 +275,15 @@ def investigation_form(request):
         form = InvestigationForm(request.POST)
         if form.is_valid():
             death = Death.objects.get(id=form.data["death"])
+            print("try love")
             if player.can_investigate(form.data['investigation_type'], death):
                 guess = Player.objects.get(id=form.data['guess'])
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
                                                              investigation_type=form.data['investigation_type'],
                                                              day=game.current_day)
+                if investigation.uses_clue():
+                    pile = CluePile.objects.get(investigator=player, target=death.murderee)
+                    pile.use()
                 game.log(message="%s investigates %s for the death of %s (answer: %s)" %
                                  (player, guess, death.murderee, "Correct" if investigation.is_correct() else "Wrong"),
                          users_who_can_see=[player])
@@ -283,6 +296,7 @@ def investigation_form(request):
                                              guess.user.username, death.murderee.user.username))
                 return HttpResponseRedirect("/")
             else:
+                print("no love?")
                 if player.can_investigate(form.data['investigation_type']):
                     messages.add_message(request, messages.ERROR, "You don't have clues for this death.")
                 else:
@@ -418,25 +432,49 @@ def items(request):
                              "You're dead, so you can't use items. Check the game log instead.")
         return HttpResponseRedirect(reverse('logs'))
 
-@notifier
+
+@login_required
+def collect_clues(request, id):
+    try: death = Death.objects.get(id=id)
+    except:
+        messages.add_message(request, messages.ERROR, "You're trying to collect clues from a nonexistent death.")
+        return HttpResponseRedirect("/")
+    player = Player.objects.get(user=request.user, game__active=True)
+    if not player.is_alive():
+        messages.add_message(request, messages.ERROR, "You're dead. Stop trying to mess with the game.")
+        return HttpResponseRedirect("/")
+    if not player.can_collect_clues(death.murderee):
+        messages.add_message(request, messages.ERROR, "You can't collect clues from this death at this time.")
+        return HttpResponseRedirect("/")
+    death.update_clue_pile(player)
+    messages.add_message(request, messages.SUCCESS, "You searched the kill site and found %d clues." % (death.total_clues))
+    return HttpResponseRedirect(reverse('recent_deaths'))
+
+
 @login_required
 def destroy_clue(request, id):
-    relevant_death = Death.objects.filter(id=id)
-    if not relevant_death.exists():
-        messages.add_message(request, messages.WARNING, "You're trying to destroy a clue from a nonexistent death.")
+    try:
+        death = Death.objects.get(id=id)
+    except:
+        messages.add_message(request, messages.ERROR, "You're trying to destroy a clue from a nonexistent death.")
         return HttpResponseRedirect("/")
-    death = relevant_death[0]
     player = Player.objects.get(user=request.user, game__active=True)
+    if not player.is_alive():
+        messages.add_message(request, messages.ERROR, "You're dead. Stop trying to mess with the game.")
+        return HttpResponseRedirect("/")
     if not player.can_destroy_clue():
-        messages.add_message(request, messages.WARNING, "You're not evil. You can't destroy clues.")
+        messages.add_message(request, messages.ERROR, "You're not evil. You can't destroy clues.")
         return HttpResponseRedirect("/")
     if not player.can_destroy_clue(death):
-        messages.add_message(request, messages.WARNING, "You've already destroyed a clue here.")
-        return HttpResponseRedirect(reverse('recent_deaths'))
+        messages.add_message(request, messages.ERROR, "You've already destroyed a clue here.")
+        return HttpResponseRedirect("/")
     death.destroy_clue(player)
-    player.game.log(message="%s destroyed a clue at %s's kill site." % (player, death.murderee), users_who_can_see=[player])
+    player.game.log(message="%s destroyed a clue at %s's kill site." % (player, death.murderee),
+                    users_who_can_see=[player])
+    messages.add_message(request, messages.SUCCESS, "Clue successfully destroyed.")
     death.save()
     return HttpResponseRedirect(reverse('recent_deaths'))
+
 
 @notifier
 @login_required
@@ -448,6 +486,7 @@ def destroy_item(request, id):
         return HttpResponseRedirect("/")
     current_item.owner = None
     player.game.log(message="%s has destroyed %s" % (player, current_item.get_name()), users_who_can_see=[player])
+    messages.add_message(request, messages.SUCCESS, "Item successfully destroyed.")
     current_item.save()
     return HttpResponseRedirect(reverse('items'))
 

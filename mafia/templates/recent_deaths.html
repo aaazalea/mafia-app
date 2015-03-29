@@ -22,8 +22,19 @@
                 {% if god %}
                     <td>{{ death.murderer.user.username }}</td>
                 {% endif %}
-                # TODO collecting and viewing clues
-                {% if player.can_destroy_clue and death in destructibles %}
+                {# TODO collecting and viewing clues #}
+                <td>
+                    {% for clue_pile in clue_piles %}
+                        {% if clue_pile.target == death.murderee %}
+                            {{ clue_pile.local_text }}
+                        {% endif %}
+                    {% endfor %}
+                </td>
+                    {% if death in gatherables %}
+                        <td><a href="{% url 'collect_clues' death.id %}" class="btn btn-default">Check for Clues</a></td>
+                    {% endif %}
+                </td>
+                {% if can_destroy and death in destructibles %}
                     <td><a href="{% url 'destroy_clue' death.id %}" class="btn btn-default">Destroy a Clue</a></td>
                 {% endif %}
             </tr>
