@@ -228,15 +228,19 @@ def recent_deaths(request):
     game = Game.objects.get(active=True)
     is_god = request.user == game.god
     recents = Death.objects.filter(murderee__game__active=True).order_by('-when', 'murderee')
+    can_destroy = False
+    destructibles = None
     if isinstance(request.user, AnonymousUser):
         return render(request, 'recent_deaths.html',
                       {'god': is_god, 'deaths': recents, 'game': game, 'user': request.user})
     elif game.has_user(request.user):
         player = Player.objects.get(user=request.user, game=game)
+        can_destroy = player.can_destroy_clue()
+        destructibles = Death.objects.exclude(clue_destroyers=player)
     else:
         player = {'god': is_god, 'game': game, 'username': request.user.username,
                   'role': {'name': "God" if is_god else "Guest"}}
-    return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents, 'player': player})
+    return render(request, 'recent_deaths.html', {'god': is_god, 'deaths': recents, 'player': player, 'can_destroy': can_destroy, 'destructibles': destructibles})
 
 
 @notifier
@@ -411,6 +415,20 @@ def items(request):
                              "You're dead, so you can't use items. Check the game log instead.")
         return HttpResponseRedirect(reverse('logs'))
 
+@notifier
+@login_required
+def destroy_clue(request, death):
+    player = Player.objects.get(user=request.user, game__active=True)
+    if not player.can_destroy_clue():
+        messages.add_message(request, messages.WARNING, "You're not evil. You can't destroy clues.")
+        return HttpResponseRedirect("/")
+    if not player.can_destroy_clue(death):
+        messages.add_message(request, messages.WARNING, "You've already destroyed a clue here.")
+        return HttpResponseRedirect(reverse('recent_deaths'))
+    death.destroy_clue(player)
+    player.game.log(message="%s has destroyed a clue at %s's kill site." % (player, death.murderee), users_who_can_see=[player])
+    death.save()
+    return HttpResponseRedirect(reverse('recent_deaths'))
 
 @notifier
 @login_required

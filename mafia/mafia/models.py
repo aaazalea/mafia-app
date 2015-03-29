@@ -323,9 +323,30 @@ class Player(models.Model):
 
     investigations = property(get_investigations)
 
+    def can_collect_clues(self, target=None):
+        if not CLUES_IN_USE:
+            return False
+        if target:
+            relevant_clues = CluePile.objects.filter(investigator=self, target=target)
+            if relevant_clues.exists() and relevant_clues[0].collected and relevant_clues[0].last_checked > datetime.now() - datetime.timedelta(hours=1):
+                return False
+        if self.role == Role.objects.get(name__iexact='investigator'):
+            return True
+        if self.role == Role.objects.get(name__iexact='superhero'):
+            return self.superheroday_set.get(day=self.game.current_day).secret_identity
+        if self.role == Role.objects.get(name__iexact='Desperado') and self.role_information > Player.DESPERADO_ACTIVATING:
+            return True
+        return False
+
     def has_clues_to_investigate(self, target):
-        # TODO implement clues
-        return True
+        # TODO check this behavior for non-clue games?
+        if not CLUES_IN_USE:
+            return True
+        relevant_clues = CluePile.objects.filter(investigator=self, target=target)
+        if relevant_clues.exists():
+            return relevant_clues[0].size > 0
+        else:
+            return False
 
     def can_investigate(self, kind=None, death=None):
         if self.elected_roles.filter(name__iexact='mayor').exists() and (kind is None or kind == Investigation.MAYORAL):
@@ -361,7 +382,7 @@ class Player(models.Model):
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.DESPERADO).exists():
                 if self.role_information > Player.DESPERADO_ACTIVATING:
-                    return True
+                    return (not death) or self.has_clues_to_investigate(death.murderee)
         if self.elected_roles.filter(name__iexact='police officer').exists() and (
                         kind is None or kind == Investigation.POLICE_OFFICER):
             if not Investigation.objects.filter(investigator=self,
@@ -377,6 +398,10 @@ class Player(models.Model):
             if self.role == Role.objects.get(name__iexact='Desperado'):
                 self.role_information = Player.DESPERADO_INACTIVE
         super(Player, self).save(*args, **kwargs)
+
+    def can_destroy_clue(self, death=None):
+        return ((self.is_evil() or self.role == Role.objects.get(
+            name__iexact="Rogue") and (not death or not self in death.clue_destroyers.all())))
 
     def can_make_kills(self):
         if self.role == Role.objects.get(name__iexact='mafia') or self.conscripted:
@@ -510,6 +535,9 @@ class Death(models.Model):
     where = models.CharField(max_length=100)
     free = models.BooleanField(default=False)
     day = models.IntegerField()
+    # Clues stuff
+    clue_destroyers = models.ManyToManyField(Player, blank=True, related_name='destroyed')
+    total_clues = models.IntegerField(null=True)
 
     def save(self, *args, **kwargs):
         if not self.pk:
@@ -605,8 +633,44 @@ class Death(models.Model):
                             self.murderer.notify(
                                 "Upon killing %s, you received their %s" % (self.murderee, item.get_name()), bad=False)
                             item.save()
+                if CLUES_IN_USE:
+                    if MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
+                        self.total_clues = 0
+                    else:
+                        self.total_clues = 1 + sum(
+                            p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
+                            self.game.living_players)
+            elif CLUES_IN_USE:
+                self.total_clues = 0
 
         super(Death, self).save(*args, **kwargs)
+
+    def destroy_clue(self, destroyer):
+        self.clue_destroyers.add(destroyer)
+        self.total_clues -= 1
+        self.save()
+
+    def update_clue_pile(self, investigator, watchlist=False):
+        current_pile = CluePile.objects.filter(investigator=investigator, target=self.murderee)
+        if current_pile.exists():
+            pile = current_pile[0]
+            if watchlist:
+                pile.size += 3  # TODO is watchlist clue size constant? Anyway, put log for this elsewhere.
+                pile.save()
+            elif not current_pile[0].collected:
+                pile.initial_size = self.total_clues
+                pile.size += self.total_clues
+                pile.collected = True
+                pile.last_checked = datetime.now()
+                pile.save()
+        elif watchlist:
+            pile = CluePile.objects.create(investigator=investigator, target=self.murderee, collected=False, size=3)
+            pile.save()
+        else:
+            pile = CluePile.objects.create(investigator=investigator, death=self.murderee,
+                                           initial_size=self.total_clues, size=self.total_clues,
+                                           last_checked=datetime.now())
+            pile.save()
 
     def __str__(self):
         if self.murderer:
@@ -634,6 +698,15 @@ class Death(models.Model):
             return "Conscripted %s" % self.murderee.role.name
         else:
             return self.murderee.role.name
+
+
+class CluePile(models.Model):
+    investigator = models.ForeignKey(Player, related_name='clues_found')
+    target = models.ForeignKey(Player, related_name='clues_about')
+    collected = models.BooleanField(default=True)
+    initial_size = models.IntegerField(default=0)
+    size = models.IntegerField(default=0)
+    last_checked = models.DateTimeField(null=True)
 
 
 class GayKnightPair(models.Model):
@@ -778,6 +851,7 @@ class Item(models.Model):
 
     def get_use_form(self):
         from forms import ItemUseForm
+
         return ItemUseForm(self)
 
     def use_text(self):
