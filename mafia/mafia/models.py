@@ -7,7 +7,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
-    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE
+    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, TRAPS_REGENERATE
 from django.utils.timezone import now
 
 
@@ -673,7 +673,10 @@ class Death(models.Model):
             if traps.exists():
                 self.free = True
                 for trap in traps:
-                    trap.state = MafiaPower.AVAILABLE
+                    if TRAPS_REGENERATE:
+                        trap.state = MafiaPower.AVAILABLE
+                    else:
+                        trap.state = MafiaPower.USED
                     trap.target = None
                     trap.save()
             if not (self.murderer and self.murderer.is_evil()):
@@ -681,9 +684,13 @@ class Death(models.Model):
                 self.free = True
             kaboom = None
             if self.kaboom and ((not self.murderer) or (not self.murderer.elected_roles.filter(
-                    name__iexact="Police officer").exists())):
+                    name__iexact="Police officer").exists() and not (
+                        self.murderer.role.name == "Gay Knight"
+                        and Death.objects.filter(murderee=self.murderer.gn_partner,
+                                                 murderer=self.murderee).exists() and self.murderer.investigation_set.filter(
+                            guess=self.murderee).exists()))):
                 if self.murderer and not self.murderer.is_evil():
-                    raise Exception("Non-mafia attempt to use a kaboom without being police officer")
+                    raise Exception("Non-mafia attempt to use a kaboom without being police officer or vengeful knight")
 
                 if (not KABOOMS_REGENERATE) or (
                             self.murderee.killable_by_bang(self.murderer) and not Item.objects.filter(
@@ -1033,7 +1040,7 @@ class Item(models.Model):
                               " please PM god(s) with the location of your camera.", bad=False)
             self.result = target
             cctv = Item.objects.get(type=Item.CCTV, number=self.number, game=self.game)
-            cctv.owner.notify("Your CCTV's camera was placed at %s") % target
+            cctv.owner.notify("Your CCTV's camera was placed at %s" % target)
         self.save()
         return None
 
