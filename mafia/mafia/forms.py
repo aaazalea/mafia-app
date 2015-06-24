@@ -93,10 +93,14 @@ class MafiaPowerForm(forms.Form):
 
     def submit(self, user):
         charge = MafiaPower.objects.get(id=self.data['power_id'])
-        if charge.power == MafiaPower.SET_A_TRAP and (not TRAPS_REGENERATE) and TRAPS_AT_A_TIME <= len(
-                MafiaPower.objects.filter(power = MafiaPower.SET_A_TRAP, state=MafiaPower.SET, game__active=True)):
-            response = "The maximum number of set a trap charges (%s) are already in use." % TRAPS_AT_A_TIME
-            return response
+        if charge.power == MafiaPower.SET_A_TRAP:
+            if (not TRAPS_REGENERATE) and TRAPS_AT_A_TIME <= len(
+                    MafiaPower.objects.filter(power=MafiaPower.SET_A_TRAP, state=MafiaPower.SET, game__active=True)):
+                response = "The maximum number of set a trap charges (%s) is already in use." % TRAPS_AT_A_TIME
+                return response
+            if MafiaPower.objects.filter(power=MafiaPower.SET_A_TRAP, game__active=True, day_used=charge.game.current_day).exists():
+                response = "A trap has already been set today. Wait to set another one tomorrow."
+                return response
         response = "Power executed successfully: %s" % charge.get_power_name()
         charge.target = Player.objects.get(id=self.data['target'])
         charge.state = MafiaPower.USED
