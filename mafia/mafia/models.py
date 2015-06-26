@@ -70,10 +70,10 @@ class Game(models.Model):
 
                 player.increment_day()
 
-                # TODO oops, this is needed for conspiracy theorists
-                player.additional_info()
+                # TODO oops, this is needed for conspiracy theorists and cynics. Wait, increment_day suffices maybe?
 
             self.current_day += 1
+
             LogItem.objects.create(anonymous_text="Day %d start" % self.current_day,
                                    text="Day %d start" % self.current_day,
                                    game=self, day_start=self)
@@ -309,10 +309,13 @@ class Player(models.Model):
                 tomorrow = tomorrow[0]
             else:
                 # make a copy of today
+                today = self.conspiracylist_set.get_or_create(day=self.game.current_day)[0]
                 tomorrow = ConspiracyList.objects.get(id=today.id)
                 tomorrow.id = None
                 tomorrow.day += 1
                 tomorrow.save()
+                for suspect in today.conspired.all():
+                    tomorrow.conspired.add(suspect)
             tablify = lambda consp: ''.join(
                 '<td>%s</td>' % d.username for d in
                 consp.conspired.all()) if consp.conspired.exists() else "<td>(empty)</td>"
@@ -386,7 +389,8 @@ class Player(models.Model):
         if self.role == Role.objects.get(name__iexact='investigator'):
             return True
         if self.role == Role.objects.get(name__iexact='superhero'):
-            return self.superheroday_set.get(day=self.game.current_day).secret_identity
+            if self.superheroday_set.filter(day=self.game.current_day).exists():
+                return self.superheroday_set.get(day=self.game.current_day).secret_identity
         if self.role == Role.objects.get(
                 name__iexact='Desperado') and self.role_information > Player.DESPERADO_ACTIVATING:
             return True
@@ -559,7 +563,14 @@ class Player(models.Model):
 
                 consp_list.save()
             except ConspiracyList.DoesNotExist:
-                self.conspiracylist_set.create(day=self.game.current_day + 1)
+                today = self.conspiracylist_set.get_or_create(day=self.game.current_day)[0]
+                tomorrow = ConspiracyList.objects.get(id=today.id)
+                tomorrow.id = None
+                tomorrow.day += 1
+                tomorrow.save()
+                for suspect in today.conspired.all():
+                    tomorrow.conspired.add(suspect)
+                # TODO Does this finally work?! Currently not if you've viewed additional info.
 
         self.save()
 
