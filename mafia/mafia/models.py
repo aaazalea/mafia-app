@@ -309,7 +309,6 @@ class Player(models.Model):
                 tomorrow = tomorrow[0]
             else:
                 # make a copy of today
-                today = self.conspiracylist_set.get_or_create(day=self.game.current_day)[0]
                 tomorrow = ConspiracyList.objects.get(id=today.id)
                 tomorrow.id = None
                 tomorrow.day += 1
