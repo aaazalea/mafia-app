@@ -7,9 +7,9 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
-    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, TRAPS_REGENERATE
+    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
+    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT
 from django.utils.timezone import now
-
 
 NO_LYNCH = "No lynch"
 
@@ -69,10 +69,7 @@ class Game(models.Model):
 
                 player.increment_day()
 
-                # TODO oops, this is needed for conspiracy theorists and cynics. Wait, increment_day suffices maybe?
-
             self.current_day += 1
-
             LogItem.objects.create(anonymous_text="Day %d start" % self.current_day,
                                    text="Day %d start" % self.current_day,
                                    game=self, day_start=self)
@@ -84,7 +81,6 @@ class Game(models.Model):
 
         self.today_start = now()
         self.save()
-
 
     def kill_day_end(self, player, why, log_message=True):
         Death.objects.create(murderee=player, when=now(), where=why, day=self.current_day)
@@ -227,6 +223,13 @@ class Player(models.Model):
                 return "Conspiracy list: [%s]" % list1
             else:
                 return "No conspiracy list"
+        elif self.role == Role.objects.get(name__iexact="Cynic"):
+            list1 = ", ".join(
+                p.username for p in self.cyniclist_set.get_or_create(day=self.game.current_day)[0].cynicized.all())
+            if list1:
+                return "Cynic list: [%s]" % list1
+            else:
+                return "No cynic list"
         elif self.role == Role.objects.get(name="Superhero"):
             superhero_day = SuperheroDay.objects.get(owner=self, day=self.game.current_day)
             if superhero_day.superhero_identity:
@@ -322,6 +325,33 @@ class Player(models.Model):
             return '<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
                    '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
                        tablify(today), tablify(tomorrow))
+        elif self.role == Role.objects.get(name__iexact='Cynic'):
+            today = self.cyniclist_set.get_or_create(day=self.game.current_day)[0]
+            tomorrow = self.cyniclist_set.filter(day=self.game.current_day + 1)
+            if tomorrow.exists():
+                tomorrow = tomorrow[0]
+            else:
+                # make a copy of today
+                tomorrow = CynicList.objects.get(id=today.id)
+                tomorrow.id = None
+                tomorrow.day += 1
+                tomorrow.save()
+                for victim in today.cynicized.all():
+                    tomorrow.cynicized.add(victim)
+                tomorrow.save()
+            tablify = lambda cyn: ''.join(
+                '<td>%s</td>' % d.username for d in
+                cyn.cynicized.all()) if cyn.cynicized.exists() else "<td>(empty)</td>"
+            if self.cyniclist_set.filter(day=self.game.current_day - 1).exists() and self.cyniclist_set.get(
+                    day=self.game.current_day - 1).cynicism_successful():
+                return 'Your cynicism yesterday paid off, and you are invulnerable today.'\
+                       '<table class=\'table\'><tr><th colspan=\'100%%\'>Your cynic list</th></tr>' \
+                       '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
+                           tablify(today), tablify(tomorrow))
+            else:
+                return '<table class=\'table\'><tr><th colspan=\'100%%\'>Your cynic list</th></tr>' \
+                       '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
+                           tablify(today), tablify(tomorrow))
         elif self.role == Role.objects.get(name="Superhero"):
             superhero_day = SuperheroDay.objects.get(owner=self, day=self.game.current_day)
             try:
@@ -371,7 +401,13 @@ class Player(models.Model):
             if killer:
                 if self.conspiracylist_set.filter(day=self.game.current_day, conspired=killer).exists():
                     return False
-
+        elif role_name == 'Cynic':
+            try:
+                cyn_yesterday = CynicList.objects.get(owner=self, day=self.game.current_day - 1)
+            except CynicList.DoesNotExist:
+                cyn_yesterday = None
+            if cyn_yesterday and cyn_yesterday.cynicism_successful():
+                return False
         if Item.objects.filter(used__gt=self.game.today_start, type=Item.MEDKIT, owner=self):
             return False
 
@@ -579,6 +615,40 @@ class Player(models.Model):
                 for suspect in today.conspired.all():
                     tomorrow.conspired.add(suspect)
                 tomorrow.save()
+        if self.role == Role.objects.get(name="Cynic"):
+            try:
+                cyn_list = self.cyniclist_set.get(day=self.game.current_day + 1)
+                count_dead = 0
+                if CYNIC_LIST_SIZE_IS_PERCENT:
+                    list_size = math.ceil(self.game.number_of_living_players * 0.01 * CYNIC_LIST_SIZE)
+                else:
+                    list_size = CYNIC_LIST_SIZE
+
+                cynees = list(cyn_list.cynicized.all())
+
+                if list_size < len(cynees):
+                    cyn_list.cynicized.remove(cyn_list.drop)
+                    backups = [cyn_list.drop, cyn_list.backup1, cyn_list.backup2, cyn_list.backup3]
+                else:
+                    backups = [cyn_list.backup1, cyn_list.backup2, cyn_list.backup3]
+
+                for cynee in cynees:
+                    if not cynee.is_alive():
+                        cyn_list.cynicized.remove(cynee)
+                        if count_dead < len(backups):
+                            cyn_list.cynicized.add(backups[count_dead])
+                        count_dead += 1
+
+                cyn_list.save()
+            except CynicList.DoesNotExist:
+                today = self.cyniclist_set.get_or_create(day=self.game.current_day)[0]
+                tomorrow = CynicList.objects.get(id=today.id)
+                tomorrow.id = None
+                tomorrow.day += 1
+                tomorrow.save()
+                for victim in today.cynicized.all():
+                    tomorrow.cynicized.add(victim)
+                tomorrow.save()
 
         self.save()
 
@@ -603,6 +673,8 @@ class Player(models.Model):
                 links.append((reverse('undo_desperado'), "Cancel going desperado"))
         if self.role == Role.objects.get(name__iexact="Conspiracy theorist"):
             links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
+        if self.role == Role.objects.get(name__iexact="Cynic"):
+            links.append((reverse('forms:cynic_list'), 'Update your cynic list'))
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
             if MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET,
@@ -704,10 +776,10 @@ class Death(models.Model):
             kaboom = None
             if self.kaboom and ((not self.murderer) or (not self.murderer.elected_roles.filter(
                     name__iexact="Police officer").exists() and not (
-                        self.murderer.role.name == "Gay Knight"
+                                self.murderer.role.name == "Gay Knight"
                         and Death.objects.filter(murderee=self.murderer.gn_partner,
                                                  murderer=self.murderee).exists() and self.murderer.investigation_set.filter(
-                            guess=self.murderee).exists()))):
+                        guess=self.murderee).exists()))):
                 if self.murderer and not self.murderer.is_evil():
                     raise Exception("Non-mafia attempt to use a kaboom without being police officer or vengeful knight")
 
@@ -1248,6 +1320,27 @@ class ConspiracyList(models.Model):
     backup3 = models.ForeignKey(Player, related_name='conspiracies_backup3', null=True)
 
 
+class CynicList(models.Model):
+    owner = models.ForeignKey(Player)
+    cynicized = models.ManyToManyField(Player, related_name='cynicisms')
+    day = models.IntegerField()
+    drop = models.ForeignKey(Player, related_name='cynicisms_drop', null=True)
+    backup1 = models.ForeignKey(Player, related_name='cynicisms_backup1', null=True)
+    backup2 = models.ForeignKey(Player, related_name='cynicisms_backup2', null=True)
+    backup3 = models.ForeignKey(Player, related_name='cynicisms_backup3', null=True)
+
+    def cynicism_successful(self):
+        """
+
+        :return: whether this cynic's cynicism worked yesterday
+        """
+        for cynee in list(self.cynicized.all()):
+            if (not cynee.is_alive()) and cynee.death.day == self.owner.game.current_day - 1:
+                # TODO unclear if cynee.death as boolean is the right way to check so changed for now
+                return True
+        return False
+
+
 class LogItem(models.Model):
     game = models.ForeignKey(Game)
     text = models.CharField(blank=False, null=False, max_length=200)
@@ -1305,6 +1398,8 @@ class SuperheroDay(models.Model):
 
         :return: whether this superhero's paranoia worked yesterday
         """
+        print("Testing!")
+        #TODO check if this actually works
         return self.paranoia and self.paranoia.death and self.paranoia.death.day == self.owner.game.current_day - 1
 
     def __str__(self):
@@ -1321,4 +1416,4 @@ class WatchList(models.Model):
 
     def __str__(self):
         return "%s's watch list on day %d: [%s]" % (
-            self.owner, self.day, ", ".join(p.username for p in self.watched.all()) )
+            self.owner, self.day, ", ".join(p.username for p in self.watched.all()))
