@@ -19,6 +19,7 @@ urlpatterns = patterns('',
                        url(r'^message-seen/(?P<message>.*)$', 'mafia.views.message_seen', name='message_seen'),
                        url(r'^item/(?P<item_id>\d+)/(?P<password>[0-9A-Za-z]+)', 'mafia.views.transfer_item',
                            name='transfer_item'),
+                       url('^rules/', 'mafia.views.rules', name='rules'),
                        url(r'^past-games/(?P<game_id>\d+)', 'mafia.views.old_logs', name='old_logs'),
                        url(r'^past-games/$', 'mafia.views.past_games', name='past_games'),
 
