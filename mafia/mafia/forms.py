@@ -49,7 +49,7 @@ class InvestigationForm(forms.Form):
     )
     investigation_type = forms.ChoiceField(choices=Investigation.INVESTIGATION_KINDS,
                                            label="What kind of investigation are you using? [choose one you're allowed to]"
-    )
+                                           )
 
 
 class LynchVoteForm(forms.Form):
@@ -93,7 +93,14 @@ class MafiaPowerForm(forms.Form):
 
     def submit(self, user):
         charge = MafiaPower.objects.get(id=self.data['power_id'])
-
+        if charge.power == MafiaPower.SET_A_TRAP:
+            if (not TRAPS_REGENERATE) and TRAPS_AT_A_TIME <= len(
+                    MafiaPower.objects.filter(power=MafiaPower.SET_A_TRAP, state=MafiaPower.SET, game__active=True)):
+                raise ValidationError(
+                    "The maximum number of set a trap charges (%s) is already in use." % TRAPS_AT_A_TIME)
+            if MafiaPower.objects.filter(power=MafiaPower.SET_A_TRAP, game__active=True, day_used=charge.game.current_day).exists():
+                raise ValidationError(
+                    "A trap has already been set today. Wait to set another one tomorrow.")
         response = "Power executed successfully: %s" % charge.get_power_name()
         charge.target = Player.objects.get(id=self.data['target'])
         charge.state = MafiaPower.USED
@@ -155,7 +162,8 @@ class ConspiracyListForm(forms.Form):
         if CONSPIRACY_LIST_SIZE_IS_PERCENT:
             if conspiracy_size > ceil(Game.objects.get(
                     active=True).number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE):
-                raise ValidationError("You may only have %d%% of game on your conspiracy list (rounded up)." % CONSPIRACY_LIST_SIZE)
+                raise ValidationError(
+                    "You may only have %d%% of game on your conspiracy list (rounded up)." % CONSPIRACY_LIST_SIZE)
         else:
             if conspiracy_size > CONSPIRACY_LIST_SIZE:
                 raise ValidationError("You may only have %d people on your conspiracy list." % CONSPIRACY_LIST_SIZE)
@@ -179,7 +187,7 @@ class ElectForm(forms.Form):
     player_elected = forms.ModelChoiceField(Player.objects.filter(death__isnull=True, game__active=True),
                                             label="Who is being elected?")
     position = forms.ModelChoiceField(ElectedRole.objects.all(),
-                                      label="What position are they being elected to?")
+        label="What position are they being elected to?")
 
 
 class HitmanSuccessForm(forms.Form):

@@ -7,7 +7,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
-    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE
+    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, TRAPS_REGENERATE
 from django.utils.timezone import now
 
 
@@ -357,25 +357,33 @@ class Player(models.Model):
         role_name = self.role.name
         if role_name == "Desperado":
             if self.role_information > Player.DESPERADO_ACTIVATING:
-                return True
+                return False
         elif role_name == "Gay Knight":
             if killer and self.gn_partner == killer and self.investigation_set.filter(guess=killer).exists():
-                return True
+                return False
         elif role_name == 'Superhero':
             try:
                 sup_yesterday = SuperheroDay.objects.get(owner=self, day=self.game.current_day - 1)
             except SuperheroDay.DoesNotExist:
                 sup_yesterday = None
             if sup_yesterday and sup_yesterday.paranoia_successful():
-                return True
+                return False
         elif role_name == "Conspiracy Theorist":
             if killer:
                 if self.conspiracylist_set.filter(day=self.game.current_day, conspired=killer).exists():
-                    return True
+                    return False
 
         if Item.objects.filter(used__gt=self.game.today_start, type=Item.MEDKIT, owner=self):
-            return True
+            return False
 
+        return True
+
+    def mic_secured(self):
+        for mic in Item.objects.filter(owner=self, type=Item.MICROPHONE, used__isnull=True):
+            if Item.objects.filter(type=Item.RECEIVER, number=mic.number, owner__isnull=False, game=self.game).exists():
+                receiver = Item.objects.get(type=Item.RECEIVER, number=mic.number, game=self.game)
+                if not (receiver.owner.is_evil() or receiver.owner.role == Role.objects.get(name__iexact='Rogue')):
+                    return True
         return False
 
     def can_collect_clues(self, target=None):
@@ -685,7 +693,10 @@ class Death(models.Model):
             if traps.exists():
                 self.free = True
                 for trap in traps:
-                    trap.state = MafiaPower.AVAILABLE
+                    if TRAPS_REGENERATE:
+                        trap.state = MafiaPower.AVAILABLE
+                    else:
+                        trap.state = MafiaPower.USED
                     trap.target = None
                     trap.save()
             if not (self.murderer and self.murderer.is_evil()):
@@ -693,15 +704,16 @@ class Death(models.Model):
                 self.free = True
             kaboom = None
             if self.kaboom and ((not self.murderer) or (not self.murderer.elected_roles.filter(
-                    name__iexact="Police officer").exists())):
+                    name__iexact="Police officer").exists() and not (
+                        self.murderer.role.name == "Gay Knight"
+                        and Death.objects.filter(murderee=self.murderer.gn_partner,
+                                                 murderer=self.murderee).exists() and self.murderer.investigation_set.filter(
+                            guess=self.murderee).exists()))):
                 if self.murderer and not self.murderer.is_evil():
-                    raise Exception("Non-mafia attempt to use a kaboom without being police officer")
+                    raise Exception("Non-mafia attempt to use a kaboom without being police officer or vengeful knight")
 
                 if (not KABOOMS_REGENERATE) or (
-                            self.murderee.killable_by_bang(self.murderer) and not Item.objects.filter(
-                                owner=self.murderee,
-                                type=Item.MICROPHONE,
-                                used__isnull=True).exists()):
+                            self.murderee.killable_by_bang(self.murderer) and not self.murderee.mic_secured()):
                     kabooms = MafiaPower.objects.filter(power=MafiaPower.KABOOM, state=MafiaPower.AVAILABLE,
                                                         game__active=True)
                     kaboom = kabooms[0]
@@ -1045,7 +1057,7 @@ class Item(models.Model):
                               " please PM god(s) with the location of your camera.", bad=False)
             self.result = target
             cctv = Item.objects.get(type=Item.CCTV, number=self.number, game=self.game)
-            cctv.owner.notify("Your CCTV's camera was placed at %s") % target
+            cctv.owner.notify("Your CCTV's camera was placed at %s" % target)
         self.save()
         return None
 
