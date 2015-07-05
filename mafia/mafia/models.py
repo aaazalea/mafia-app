@@ -315,6 +315,8 @@ class Player(models.Model):
                 tomorrow.save()
                 for suspect in today.conspired.all():
                     tomorrow.conspired.add(suspect)
+                tomorrow.save()
+
             tablify = lambda consp: ''.join(
                 '<td>%s</td>' % d.username for d in
                 consp.conspired.all()) if consp.conspired.exists() else "<td>(empty)</td>"
@@ -569,7 +571,7 @@ class Player(models.Model):
                 tomorrow.save()
                 for suspect in today.conspired.all():
                     tomorrow.conspired.add(suspect)
-                # TODO Does this finally work?! Currently not if you've viewed additional info.
+                tomorrow.save()
 
         self.save()
 
