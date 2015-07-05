@@ -24,10 +24,13 @@ from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteF
     ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
     WatchListForm
 from django.shortcuts import render
+import requests
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
     SuperheroDay, GayKnightPair, ElectedRole, CluePile
 from django.core.urlresolvers import reverse
+
+from markdown import markdown
 
 
 def notifier(function):
@@ -108,6 +111,33 @@ def index(request):
     return render(request, 'index.html',
                   params)
 
+
+def rules(request):
+    params = {}
+    try:
+        game = Game.objects.get(active=True)
+        try:
+            u = request.user
+            if not isinstance(u, AnonymousUser):
+                player = Player.objects.get(game=game, user=u)
+            else:
+                player = False
+                params['game'] = game
+        except Player.DoesNotExist:
+            player = False
+            params['user'] = request.user
+            params['game'] = game
+    except Game.DoesNotExist:
+        game = False
+
+    markdown_rules = requests.get('https://raw.githubusercontent.com/jake223/Mafia-rules/master/README.md').content
+    markdown_rules = ''.join(i for i in markdown_rules if ord(i)<128)
+    html = markdown(markdown_rules)
+    params['rules_content'] = html
+    if game:
+        return render(request, 'rules.html', params)
+    else:
+        return render(request, 'rules2.html', params)
 
 @notifier
 @login_required

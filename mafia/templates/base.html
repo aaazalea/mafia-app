@@ -33,8 +33,8 @@
                     <li><a href="{% url "player_intros" %}">Players</a></li>
                     {% if player %}
                         <li><a href="{% url "logs" %}">Game Log</a></li>
-
-                        <li><a href="{{ player.game.rules_url }}" target="_blank">Rules</a></li>
+                        {% url rules as rules_url %}
+                        <li class="{% ifequal request.url rules_url %}active{% endifequal %}"><a href="{{ rules_url }}" target="_blank">Rules</a></li>
                         <li class="dropdown">
                             <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button"
                                aria-expanded="false">Actions
