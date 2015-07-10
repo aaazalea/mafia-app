@@ -1419,7 +1419,6 @@ class SuperheroDay(models.Model):
 
         :return: whether this superhero's paranoia worked yesterday
         """
-        print("Testing!")
         # TODO check if this actually works
         return self.paranoia and (
         not self.paranoia.is_alive()) and self.paranoia.death.day == self.owner.game.current_day - 1

@@ -776,7 +776,6 @@ def resurrect_player(request, pid):
 @login_required
 def conspiracy_list_form(request):
     form = ConspiracyListForm(request.POST or None)
-    print "we're here"
     if form.is_valid():
         player = Player.objects.get(game__active=True, user=request.user)
         if player.role != Role.objects.get(name__iexact="Conspiracy theorist"):
@@ -1015,7 +1014,6 @@ def configure_game(request):
         messages.success(request, "Paired GNs successfully.")
 
     if request.POST and 'purpose' in request.POST and request.POST['purpose'] == 'start':
-        print "starting game"
         messages.success(request, "Game started successfully. Players "  # have been notified by e-mail and
                                   " can now log in.")
         # TODO email the players
