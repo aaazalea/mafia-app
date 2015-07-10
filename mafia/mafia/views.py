@@ -1175,26 +1175,25 @@ def modify_watch_list(request, day=None):
     watchlist = player.watchlist_set.get_or_create(day=day)[0]
     if request.POST:
         form = WatchListForm(request.POST)
-        tomorrow = form.cleaned_data['day'] > player.game.current_day  # could be after tomorrow, this is ok
-        today = form.cleaned_data['day'] == player.game.current_day and (now() - player.game.today_start).seconds < 3600
+        if form.is_valid():
+            tomorrow = form.cleaned_data['day'] > player.game.current_day  # could be after tomorrow, this is ok
+            today = form.cleaned_data['day'] == player.game.current_day and (now() - player.game.today_start).seconds < 3600
 
-        # no idea why this is necessary, but I get strange bugs otherwise.
-        # TODO: Convert this to cleaned_data
-        data = dict(form.data)['watched']
+            # no idea why this is necessary, but I get strange bugs otherwise.
+            # TODO: Convert this to cleaned_data
+            data = form.cleaned_data['watched']
 
-        if isinstance(data, unicode):
-            data = [form.data['watched']]
-        if (tomorrow or today) and len(data) <= 3:
-            watchlist.watched.clear()
-            for pid in data:
-                watchlist.watched.add(pid)
-            watchlist.save()
-            messages.success(request, "Watchlist updated.")
-            return HttpResponseRedirect('/')
-        elif len(data) <= 3:
-            messages.error(request, "You can't update that day's watchlist anymore.")
-        else:
-            messages.error(request, "You can only put up to three people on your watchlist.")
+            if (tomorrow or today) and len(data) <= 3:
+                watchlist.watched.clear()
+                for pid in data:
+                    watchlist.watched.add(pid)
+                watchlist.save()
+                messages.success(request, "Watchlist updated.")
+                return HttpResponseRedirect('/')
+            elif len(data) <= 3:
+                messages.error(request, "You can't update that day's watchlist anymore.")
+            else:
+                messages.error(request, "You can only put up to three people on your watchlist.")
     else:
         form = WatchListForm(initial={'day': day, 'watched': [watch.id for watch in watchlist.watched.all()]})
 
