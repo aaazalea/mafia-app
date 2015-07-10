@@ -24,6 +24,7 @@ from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteF
     ConspiracyListForm, CynicListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
     WatchListForm
 from django.shortcuts import render
+import requests
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, MafiaPower, Notification, \
     SuperheroDay, GayKnightPair, ElectedRole, CluePile
