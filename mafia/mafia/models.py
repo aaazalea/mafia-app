@@ -20,7 +20,6 @@ class Game(models.Model):
     archived = models.BooleanField(default=False)
     name = models.CharField(max_length=30)
     current_day = models.IntegerField(default=0)
-    rules_url = models.URLField()
     mafia_counts = models.IntegerField(default=0)
     today_start = models.DateTimeField(null=True)
 
