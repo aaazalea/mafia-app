@@ -169,6 +169,11 @@ class ConspiracyListForm(forms.Form):
                 raise ValidationError("You may only have %d people on your conspiracy list." % CONSPIRACY_LIST_SIZE)
         return self.cleaned_data['new_conspiracy_list']
 
+    def clean(self):
+        if self.cleaned_data['backup1'] and (self.cleaned_data['backup1'] == self.cleaned_data['backup2'] or self.cleaned_data['backup3'] == self.cleaned_data['backup1']) or (self.cleaned_data['backup2'] and self.cleaned_data['backup2'] == self.cleaned_data['backup3']):
+            raise ValidationError(
+                    "You should not have multiple identical backups")
+
 
 class CynicListForm(forms.Form):
     new_cynic_list = forms.ModelMultipleChoiceField(queryset=Player.objects.filter(game__active=True, death=None))
@@ -192,6 +197,12 @@ class CynicListForm(forms.Form):
             if cynicism_size > CYNIC_LIST_SIZE:
                 raise ValidationError("You may only have %d people on your cynic list." % CYNIC_LIST_SIZE)
         return self.cleaned_data['new_cynic_list']
+
+    def clean(self):
+        if self.cleaned_data['backup1'] and (self.cleaned_data['backup1'] == self.cleaned_data['backup2'] or self.cleaned_data['backup3'] == self.cleaned_data['backup1']) or (self.cleaned_data['backup2'] and self.cleaned_data['backup2'] == self.cleaned_data['backup3']):
+            raise ValidationError(
+                    "You should not have multiple identical backups")
+
 
 
 class InnocentChildRevealForm(forms.Form):

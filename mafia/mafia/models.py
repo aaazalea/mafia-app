@@ -344,7 +344,7 @@ class Player(models.Model):
                 cyn.cynicized.all()) if cyn.cynicized.exists() else "<td>(empty)</td>"
             if self.cyniclist_set.filter(day=self.game.current_day - 1).exists() and self.cyniclist_set.get(
                     day=self.game.current_day - 1).cynicism_successful():
-                return 'Your cynicism yesterday paid off, and you are invulnerable today.'\
+                return 'Your cynicism yesterday paid off, and you are invulnerable today.' \
                        '<table class=\'table\'><tr><th colspan=\'100%%\'>Your cynic list</th></tr>' \
                        '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
                            tablify(today), tablify(tomorrow))
@@ -590,20 +590,31 @@ class Player(models.Model):
                 else:
                     list_size = CONSPIRACY_LIST_SIZE
 
-                conspiratees = list(consp_list.conspired.all())
-
-                if list_size < len(conspiratees):
+                if list_size < len(consp_list.conspired.all()):
+                    # TODO When too many people die in a day you may need to drop more than 1 person from your list
                     consp_list.conspired.remove(consp_list.drop)
-                    backups = [consp_list.drop, consp_list.backup1, consp_list.backup2, consp_list.backup3]
+                    # Gives the set of possible backups who are still alive
+                    backups = [person for person in
+                               (consp_list.drop, consp_list.backup1, consp_list.backup2, consp_list.backup3) if
+                               (person and person.is_alive())]
+                    consp_list.drop = None
                 else:
-                    backups = [consp_list.backup1, consp_list.backup2, consp_list.backup3]
+                    backups = [person for person in (consp_list.backup1, consp_list.backup2, consp_list.backup3) if
+                               (person and person.is_alive())]
+
+                conspiratees = list(consp_list.conspired.all())
 
                 for conspiratee in conspiratees:
                     if not conspiratee.is_alive():
                         consp_list.conspired.remove(conspiratee)
                         if count_dead < len(backups):
                             consp_list.conspired.add(backups[count_dead])
-                        count_dead += 1
+                            count_dead += 1
+
+                if not (consp_list.drop and consp_list.drop.is_alive()):
+                    consp_list.drop = consp_list.conspired.first()
+                (consp_list.backup1, consp_list.backup2, consp_list.backup3) = (backups + [None, None, None])[
+                                                                               count_dead:count_dead + 3]
 
                 consp_list.save()
             except ConspiracyList.DoesNotExist:
@@ -624,20 +635,31 @@ class Player(models.Model):
                 else:
                     list_size = CYNIC_LIST_SIZE
 
-                cynees = list(cyn_list.cynicized.all())
-
-                if list_size < len(cynees):
+                if list_size < len(cyn_list.cynicized.all()):
+                    # TODO When too many people die in a day you may need to drop more than 1 person from your list
                     cyn_list.cynicized.remove(cyn_list.drop)
-                    backups = [cyn_list.drop, cyn_list.backup1, cyn_list.backup2, cyn_list.backup3]
+                    # Gives the set of possible backups who are still alive
+                    backups = [person for person in
+                               (cyn_list.drop, cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) if
+                               (person and person.is_alive())]
+                    cyn_list.drop = None
                 else:
-                    backups = [cyn_list.backup1, cyn_list.backup2, cyn_list.backup3]
+                    backups = [person for person in (cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) if
+                               (person and person.is_alive())]
+
+                cynees = list(cyn_list.cynicized.all())
 
                 for cynee in cynees:
                     if not cynee.is_alive():
                         cyn_list.cynicized.remove(cynee)
                         if count_dead < len(backups):
                             cyn_list.cynicized.add(backups[count_dead])
-                        count_dead += 1
+                            count_dead += 1
+
+                if not (cyn_list.drop and cyn_list.drop.is_alive()):
+                    cyn_list.drop = cyn_list.cynicized.first()
+                (cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) = (backups + [None, None, None])[
+                                                                               count_dead:count_dead + 3]
 
                 cyn_list.save()
             except CynicList.DoesNotExist:
@@ -1336,7 +1358,6 @@ class CynicList(models.Model):
         """
         for cynee in list(self.cynicized.all()):
             if (not cynee.is_alive()) and cynee.death.day == self.owner.game.current_day - 1:
-                # TODO unclear if cynee.death as boolean is the right way to check so changed for now
                 return True
         return False
 
@@ -1399,8 +1420,9 @@ class SuperheroDay(models.Model):
         :return: whether this superhero's paranoia worked yesterday
         """
         print("Testing!")
-        #TODO check if this actually works
-        return self.paranoia and self.paranoia.death and self.paranoia.death.day == self.owner.game.current_day - 1
+        # TODO check if this actually works
+        return self.paranoia and (
+        not self.paranoia.is_alive()) and self.paranoia.death.day == self.owner.game.current_day - 1
 
     def __str__(self):
         if self.superhero_identity:
