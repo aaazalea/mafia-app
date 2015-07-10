@@ -24,7 +24,6 @@ from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteF
     ConspiracyListForm, CynicListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
     WatchListForm
 from django.shortcuts import render
-import requests
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, MafiaPower, Notification, \
     SuperheroDay, GayKnightPair, ElectedRole, CluePile
@@ -152,12 +151,12 @@ def death_report(request):
     form = DeathReportForm(request.POST or None)
     me = Player.objects.get(user=request.user, game__active=True)
     if form.is_valid():
-        where = form.data['where']
-        killer = Player.objects.get(id=form.data['killer'])
+        where = form.cleaned_data['where']
+        killer = form.cleaned_data['killer']
         killed = me
 
-        when = now() - timedelta(minutes=int(form.data['when']))
-        kaboom = 'kaboom' in form.data
+        when = now() - timedelta(minutes=form.cleaned_data['when'])
+        kaboom = form.cleaned_data['kaboom']
         Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom, where=where,
                              day=Game.objects.get(active=True).current_day)
         return HttpResponseRedirect("/")
@@ -186,8 +185,8 @@ def superhero_form(request):
         except SuperheroDay.DoesNotExist:
             form = SuperheroForm(initial={'superhero_identity': False, 'paranoia': me})
     if form.is_valid():
-        superhero_identity = 'superhero_identity' in form.data
-        paranoia = Player.objects.get(id=form.data['paranoia'])
+        superhero_identity = form.cleaned_data['superhero_identity']
+        paranoia = form.cleaned_data['paranoia']
         today = me.game.current_day
         if me.superheroday_set.filter(day=today + 1).exists():
             tomorrow_day = me.superheroday_set.get(day=today + 1)
@@ -227,11 +226,11 @@ def kill_report(request):
     if request.method == "POST":
         form = KillReportForm(request.POST)
         if form.is_valid():
-            where = form.data['where']
-            killed = Player.objects.get(id=form.data['killed'])
+            where = form.cleaned_data['where']
+            killed = form.cleaned_data['killed']
             killer = Player.objects.get(user=request.user, game__active=True)
-            when = now() - timedelta(minutes=int(form.data['when']))
-            kaboom = 'kaboom' in form.data
+            when = now() - timedelta(minutes=form.cleaned_data['when'])
+            kaboom = form.cleaned_data['kaboom']
             try:
                 Death.objects.create(when=when, murderer=killer, murderee=killed, kaboom=kaboom,
                                      day=Game.objects.get(active=True).current_day, where=where)
@@ -313,12 +312,11 @@ def investigation_form(request):
     if request.method == "POST":
         form = InvestigationForm(request.POST)
         if form.is_valid():
-            death = Death.objects.get(id=form.data["death"])
-            print("try love")
-            if player.can_investigate(form.data['investigation_type'], death):
-                guess = Player.objects.get(id=form.data['guess'])
+            death = form.cleaned_data['death']
+            if player.can_investigate(form.cleaned_data['investigation_type'], death):
+                guess = form.cleaned_data['guess']
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
-                                                             investigation_type=form.data['investigation_type'],
+                                                             investigation_type=form.cleaned_data['investigation_type'],
                                                              day=game.current_day)
                 if investigation.uses_clue():
                     pile = CluePile.objects.get(investigator=player, target=death.murderee)
@@ -335,8 +333,7 @@ def investigation_form(request):
                                              guess.user.username, death.murderee.user.username))
                 return HttpResponseRedirect("/")
             else:
-                print("no love?")
-                if player.can_investigate(form.data['investigation_type']):
+                if player.can_investigate(form.cleaned_data['investigation_type']):
                     messages.add_message(request, messages.ERROR, "You don't have clues for this death.")
                 else:
                     messages.add_message(request, messages.ERROR, "You can't use that kind of investigation.")
@@ -417,7 +414,7 @@ def lynch_vote(request):
         if request.method == "POST":
             form = LynchVoteForm(request.POST)
             if form.is_valid():
-                vote_value = Player.objects.get(id=form.data["vote"]) if form.data["vote"] else None
+                vote_value = form.cleaned_data["vote"]
                 vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=now(),
                                                 day=game.current_day)
                 if vote_value:
@@ -448,13 +445,10 @@ def items(request):
     if request.POST:
         form = Form(request.POST)
         if form.is_valid():
-            item_to_use = Item.objects.get(id=form.data['item'])
+            item_to_use = form.cleaned_data['item']
             if not item_to_use.used:
-                if 'target' in form.data:
-                    try:
-                        target = Player.objects.get(id=form.data['target'])
-                    except ValueError:
-                        target = form.data['target']
+                if 'target' in form.cleaned_data:
+                    target = form.cleaned_data['target']
                     messages.info(request, "Item used: %s. Target: %s" % (item_to_use, target))
                     item_to_use.use(target)
                 else:
@@ -583,12 +577,12 @@ def sign_up(request):
         game = None
     form = SignUpForm(request.POST or None)
     if form.is_valid():
-        username = form.data['username']
-        password = form.data['password']
-        confirm_password = form.data['confirm_password']
-        email = form.data['email']
-        picture = form.data['picture']
-        intro = form.data['introduction']
+        username = form.cleaned_data['username']
+        password = form.cleaned_data['password']
+        confirm_password = form.cleaned_data['confirm_password']
+        email = form.cleaned_data['email']
+        picture = form.cleaned_data['picture']
+        intro = form.cleaned_data['introduction']
         try:
             user = User.objects.get(username=username)
             if not user.check_password(password):
@@ -792,7 +786,7 @@ def conspiracy_list_form(request):
         if conspiracy.drop.username not in consp_list:
             messages.error(request, "Your person-to-drop must be on your list.")
             player = Player.objects.get(user=request.user, game__active=True)
-            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
                                                  'url': reverse('forms:conspiracy_list')})
         if form.cleaned_data['backup1']:
             if form.cleaned_data['backup1'].username in consp_list:
@@ -903,10 +897,7 @@ def logs(request):
 def ic_reveal(request):
     form = InnocentChildRevealForm(request.POST or None)
     if form.is_valid():
-        data = form.data['players_revealed_to']
-        if isinstance(data, unicode):
-            data = [data]
-        revealed_to = [Player.objects.get(id=int(p)) for p in data]
+        revealed_to = form.cleaned_data['players_revealed_to']
         if revealed_to:
             game = revealed_to[0].game
             revealer = Player.objects.get(game=game, user=request.user)
@@ -1014,6 +1005,7 @@ def configure_game(request):
         messages.success(request, "Paired GNs successfully.")
 
     if request.POST and 'purpose' in request.POST and request.POST['purpose'] == 'start':
+        print "starting game"
         messages.success(request, "Game started successfully. Players "  # have been notified by e-mail and
                                   " can now log in.")
         # TODO email the players
@@ -1080,9 +1072,9 @@ def configure_game(request):
 def election(request):
     form = ElectForm(request.POST or None)
     if form.is_valid():
-        player_elected = Player.objects.get(id=form.data['player_elected'])
+        player_elected = form.cleaned_data['player_elected']
         game = player_elected.game
-        position = ElectedRole.objects.get(id=form.data['position'])
+        position = form.cleaned_data['position']
         player_elected.elect(position)
 
         return HttpResponseRedirect(reverse('logs'))
@@ -1127,11 +1119,11 @@ def hitman_success(request):
     if request.method == "POST":
         form = HitmanSuccessForm(request.POST)
         if form.is_valid():
-            where = form.data['where']
-            hitman = MafiaPower.objects.get(id=form.data['hitman'])
+            where = form.cleaned_data['where']
+            hitman = form.cleaned_data['hitman']
             killed = hitman.target
-            when = now() - timedelta(minutes=int(form.data['when']))
-            kaboom = 'kaboom' in form.data
+            when = now() - timedelta(minutes=form.cleaned_data['when'])
+            kaboom = form.cleaned_data['kaboom']
 
             Death.objects.create(when=when, murderer=None, murderee=killed, kaboom=kaboom,
                                  day=killed.game.current_day, where=where)
@@ -1156,8 +1148,8 @@ def cctv_death_form(request):
         return HttpResponseRedirect("/")
     form = CCTVDeathForm(request.POST or None)
     if form.is_valid():
-        cctv = Item.objects.get(id=form.data['cctv'])
-        death = Death.objects.get(id=form.data['death'])
+        cctv = form.cleaned_data['cctv']
+        death = form.cleaned_data['death']
         if death.kaboom:
             cctv.owner.notify("Your CCTV has mysteriously gone blank. Perhaps this was caused by an explosion.")
             cctv.result = "Screen gone black"
@@ -1182,10 +1174,11 @@ def modify_watch_list(request, day=None):
     watchlist = player.watchlist_set.get_or_create(day=day)[0]
     if request.POST:
         form = WatchListForm(request.POST)
-        tomorrow = form.data['day'] > player.game.current_day  # could be after tomorrow, this is ok
-        today = form.data['day'] == player.game.current_day and (now() - player.game.today_start).seconds < 3600
+        tomorrow = form.cleaned_data['day'] > player.game.current_day  # could be after tomorrow, this is ok
+        today = form.cleaned_data['day'] == player.game.current_day and (now() - player.game.today_start).seconds < 3600
 
         # no idea why this is necessary, but I get strange bugs otherwise.
+        # TODO: Convert this to cleaned_data
         data = dict(form.data)['watched']
 
         if isinstance(data, unicode):
