@@ -884,14 +884,10 @@ class Death(models.Model):
                             item.save()
 
                 if self.murderer.is_mafia_don():
-                    # TODO don currently prevented from making two of 3 consecutive kills??
                     don_kills = Death.objects.filter(murderee__game=self.murderee.game, made_by_don=True,
                                                      murderer=self.murderer).order_by('-when')
                     mafia_kills = Death.objects.filter(Q(murderer__role__name="Mafia") | Q(murderer__conscripted=True),
                                                        murderee__game=self.murderer.game).order_by('-when')
-                    print("Here we go")
-                    print(don_kills)
-                    print(mafia_kills)
                     if don_kills.exists() and mafia_kills.exists() and (
                                     don_kills[0] == mafia_kills[0] or (len(mafia_kills) > 1 and don_kills[0] == mafia_kills[1])):
                         self.murderer.elected_roles.remove(ElectedRole.objects.get(name="Don"))
