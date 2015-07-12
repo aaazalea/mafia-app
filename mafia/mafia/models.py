@@ -584,39 +584,6 @@ class Player(models.Model):
         if self.role == Role.objects.get(name="Conspiracy Theorist"):
             try:
                 consp_list = self.conspiracylist_set.get(day=self.game.current_day + 1)
-                count_dead = 0
-                if CONSPIRACY_LIST_SIZE_IS_PERCENT:
-                    list_size = math.ceil(self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE)
-                else:
-                    list_size = CONSPIRACY_LIST_SIZE
-
-                if list_size < len(consp_list.conspired.all()):
-                    # TODO When too many people die in a day you may need to drop more than 1 person from your list
-                    consp_list.conspired.remove(consp_list.drop)
-                    # Gives the set of possible backups who are still alive
-                    backups = [person for person in
-                               (consp_list.drop, consp_list.backup1, consp_list.backup2, consp_list.backup3) if
-                               (person and person.is_alive())]
-                    consp_list.drop = None
-                else:
-                    backups = [person for person in (consp_list.backup1, consp_list.backup2, consp_list.backup3) if
-                               (person and person.is_alive())]
-
-                conspiratees = list(consp_list.conspired.all())
-
-                for conspiratee in conspiratees:
-                    if not conspiratee.is_alive():
-                        consp_list.conspired.remove(conspiratee)
-                        if count_dead < len(backups):
-                            consp_list.conspired.add(backups[count_dead])
-                            count_dead += 1
-
-                if not (consp_list.drop and consp_list.drop.is_alive()):
-                    consp_list.drop = consp_list.conspired.first()
-                (consp_list.backup1, consp_list.backup2, consp_list.backup3) = (backups + [None, None, None])[
-                                                                               count_dead:count_dead + 3]
-
-                consp_list.save()
             except ConspiracyList.DoesNotExist:
                 today = self.conspiracylist_set.get_or_create(day=self.game.current_day)[0]
                 tomorrow = ConspiracyList.objects.get(id=today.id)
@@ -626,42 +593,46 @@ class Player(models.Model):
                 for suspect in today.conspired.all():
                     tomorrow.conspired.add(suspect)
                 tomorrow.save()
+                consp_list = tomorrow
+
+
+            count_dead = 0
+            if CONSPIRACY_LIST_SIZE_IS_PERCENT:
+                list_size = math.ceil(self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE)
+            else:
+                list_size = CONSPIRACY_LIST_SIZE
+
+            if list_size < len(consp_list.conspired.all()):
+                # TODO When too many people die in a day you may need to drop more than 1 person from your list
+                consp_list.conspired.remove(consp_list.drop)
+                # Gives the set of possible backups who are still alive
+                backups = [person for person in
+                           (consp_list.drop, consp_list.backup1, consp_list.backup2, consp_list.backup3) if
+                           (person and person.is_alive())]
+                consp_list.drop = None
+            else:
+                backups = [person for person in (consp_list.backup1, consp_list.backup2, consp_list.backup3) if
+                           (person and person.is_alive())]
+
+            conspiratees = list(consp_list.conspired.all())
+
+            for conspiratee in conspiratees:
+                if not conspiratee.is_alive():
+                    consp_list.conspired.remove(conspiratee)
+                    if count_dead < len(backups):
+                        consp_list.conspired.add(backups[count_dead])
+                        count_dead += 1
+
+            if not (consp_list.drop and consp_list.drop.is_alive()):
+                consp_list.drop = consp_list.conspired.first()
+            (consp_list.backup1, consp_list.backup2, consp_list.backup3) = (backups + [None, None, None])[
+                                                                           count_dead:count_dead + 3]
+
+            consp_list.save()
+
         if self.role == Role.objects.get(name="Cynic"):
             try:
                 cyn_list = self.cyniclist_set.get(day=self.game.current_day + 1)
-                count_dead = 0
-                if CYNIC_LIST_SIZE_IS_PERCENT:
-                    list_size = math.ceil(self.game.number_of_living_players * 0.01 * CYNIC_LIST_SIZE)
-                else:
-                    list_size = CYNIC_LIST_SIZE
-
-                if list_size < len(cyn_list.cynicized.all()):
-                    # TODO When too many people die in a day you may need to drop more than 1 person from your list
-                    cyn_list.cynicized.remove(cyn_list.drop)
-                    # Gives the set of possible backups who are still alive
-                    backups = [person for person in
-                               (cyn_list.drop, cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) if
-                               (person and person.is_alive())]
-                    cyn_list.drop = None
-                else:
-                    backups = [person for person in (cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) if
-                               (person and person.is_alive())]
-
-                cynees = list(cyn_list.cynicized.all())
-
-                for cynee in cynees:
-                    if not cynee.is_alive():
-                        cyn_list.cynicized.remove(cynee)
-                        if count_dead < len(backups):
-                            cyn_list.cynicized.add(backups[count_dead])
-                            count_dead += 1
-
-                if not (cyn_list.drop and cyn_list.drop.is_alive()):
-                    cyn_list.drop = cyn_list.cynicized.first()
-                (cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) = (backups + [None, None, None])[
-                                                                               count_dead:count_dead + 3]
-
-                cyn_list.save()
             except CynicList.DoesNotExist:
                 today = self.cyniclist_set.get_or_create(day=self.game.current_day)[0]
                 tomorrow = CynicList.objects.get(id=today.id)
@@ -671,6 +642,42 @@ class Player(models.Model):
                 for victim in today.cynicized.all():
                     tomorrow.cynicized.add(victim)
                 tomorrow.save()
+
+                cyn_list = tomorrow
+
+            count_dead = 0
+            if CYNIC_LIST_SIZE_IS_PERCENT:
+                list_size = math.ceil(self.game.number_of_living_players * 0.01 * CYNIC_LIST_SIZE)
+            else:
+                list_size = CYNIC_LIST_SIZE
+
+            if list_size < len(cyn_list.cynicized.all()):
+                # TODO When too many people die in a day you may need to drop more than 1 person from your list
+                cyn_list.cynicized.remove(cyn_list.drop)
+                # Gives the set of possible backups who are still alive
+                backups = [person for person in
+                           (cyn_list.drop, cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) if
+                           (person and person.is_alive())]
+                cyn_list.drop = None
+            else:
+                backups = [person for person in (cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) if
+                           (person and person.is_alive())]
+
+            cynees = list(cyn_list.cynicized.all())
+
+            for cynee in cynees:
+                if not cynee.is_alive():
+                    cyn_list.cynicized.remove(cynee)
+                    if count_dead < len(backups):
+                        cyn_list.cynicized.add(backups[count_dead])
+                        count_dead += 1
+
+            if not (cyn_list.drop and cyn_list.drop.is_alive()):
+                cyn_list.drop = cyn_list.cynicized.first()
+            (cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) = (backups + [None, None, None])[
+                                                                           count_dead:count_dead + 3]
+
+            cyn_list.save()
 
         self.save()
 
@@ -1357,7 +1364,7 @@ class CynicList(models.Model):
         :return: whether this cynic's cynicism worked yesterday
         """
         for cynee in list(self.cynicized.all()):
-            if (not cynee.is_alive()) and cynee.death.day == self.owner.game.current_day - 1:
+            if (not cynee.is_alive()) and cynee.death.day == self.owner.game.current_day - 1 and cynee.death.murderer:
                 return True
         return False
 
