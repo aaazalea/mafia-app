@@ -21,12 +21,12 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
+    ConspiracyListForm, CynicListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
     WatchListForm
 from django.shortcuts import render
 import requests
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, MafiaPower, Notification, \
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, MafiaPower, Notification, \
     SuperheroDay, GayKnightPair, ElectedRole, CluePile
 from django.core.urlresolvers import reverse
 
@@ -783,24 +783,38 @@ def conspiracy_list_form(request):
             return HttpResponseRedirect("/")
         conspiracy = ConspiracyList.objects.get_or_create(owner=player, day=player.game.current_day + 1)[0]
         conspiracy.conspired.clear()
-        data = form.data['new_conspiracy_list']
-        if isinstance(data, unicode):
-            data = [data]
+        data = form.cleaned_data['new_conspiracy_list']
         consp_list = []
         for conspiree in data:
-            c = Player.objects.get(id=int(conspiree))
-            conspiracy.conspired.add(c)
-            consp_list.append(c.username)
-
-        conspiracy.drop = Player.objects.get(id=form.data['person_to_remove'])
+            conspiracy.conspired.add(conspiree)
+            consp_list.append(conspiree.username)
+        conspiracy.drop = form.cleaned_data['person_to_remove']
         if conspiracy.drop.username not in consp_list:
             messages.error(request, "Your person-to-drop must be on your list.")
             player = Player.objects.get(user=request.user, game__active=True)
-            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
+            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
                                                  'url': reverse('forms:conspiracy_list')})
-        conspiracy.backup1 = Player.objects.get(id=form.data['backup1'])
-        conspiracy.backup2 = Player.objects.get(id=form.data['backup2'])
-        conspiracy.backup3 = Player.objects.get(id=form.data['backup3'])
+        if form.cleaned_data['backup1']:
+            if form.cleaned_data['backup1'].username in consp_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                                 'url': reverse('forms:cynic_list')})
+            conspiracy.backup1 = form.cleaned_data['backup1']
+            if form.cleaned_data['backup2']:
+                if form.cleaned_data['backup2'].username in consp_list:
+                    messages.error(request, "Your backups cannot be people on your list")
+                    player = Player.objects.get(user=request.user, game__active=True)
+                    return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                                 'url': reverse('forms:cynic_list')})
+                conspiracy.backup2 = form.cleaned_data['backup2']
+                if form.cleaned_data['backup3']:
+                    if form.cleaned_data['backup3'].username in consp_list:
+                        messages.error(request, "Your backups cannot be people on your list")
+                        player = Player.objects.get(user=request.user, game__active=True)
+                        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                                     'url': reverse('forms:cynic_list')})
+                    conspiracy.backup3 = form.cleaned_data['backup3']
         conspiracy.save()
         player.log("%s has updated their conspiracy list for day %d to: [%s]" % (player, player.game.current_day + 1,
                                                                                  ", ".join(consp_list)))
@@ -811,6 +825,60 @@ def conspiracy_list_form(request):
         return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Conspiracy List",
                                              'url': reverse('forms:conspiracy_list')})
 
+
+@notifier
+@login_required
+def cynic_list_form(request):
+    form = CynicListForm(request.POST or None)
+    if form.is_valid():
+        player = Player.objects.get(game__active=True, user=request.user)
+        if player.role != Role.objects.get(name__iexact="Cynic"):
+            messages.warning(request, "You're not a cynic!")
+            return HttpResponseRedirect("/")
+        cynicism = CynicList.objects.get_or_create(owner=player, day=player.game.current_day + 1)[0]
+        cynicism.cynicized.clear()
+        data = form.cleaned_data['new_cynic_list']
+        cyn_list = []
+        for cynee in data:
+            cynicism.cynicized.add(cynee)
+            cyn_list.append(cynee.username)
+
+        cynicism.drop = form.cleaned_data['person_to_remove']
+        if cynicism.drop.username not in cyn_list:
+            messages.error(request, "Your person-to-drop must be on your list.")
+            player = Player.objects.get(user=request.user, game__active=True)
+            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                                 'url': reverse('forms:cynic_list')})
+        if form.cleaned_data['backup1']:
+            if form.cleaned_data['backup1'].username in cyn_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                                 'url': reverse('forms:cynic_list')})
+            cynicism.backup1 = form.cleaned_data['backup1']
+            if form.cleaned_data['backup2']:
+                if form.cleaned_data['backup2'].username in cyn_list:
+                    messages.error(request, "Your backups cannot be people on your list")
+                    player = Player.objects.get(user=request.user, game__active=True)
+                    return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                                 'url': reverse('forms:cynic_list')})
+                cynicism.backup2 = form.cleaned_data['backup2']
+                if form.cleaned_data['backup3']:
+                    if form.cleaned_data['backup3'].username in cyn_list:
+                        messages.error(request, "Your backups cannot be people on your list")
+                        player = Player.objects.get(user=request.user, game__active=True)
+                        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                                 'url': reverse('forms:cynic_list')})
+                    cynicism.backup3 = form.cleaned_data['backup3']
+        cynicism.save()
+        player.log("%s has updated their cynic list for day %d to: [%s]" % (player, player.game.current_day + 1,
+                                                                                 ", ".join(cyn_list)))
+        messages.success(request, "Cynic list updated successfully")
+        return HttpResponseRedirect(reverse('your_role'))
+    else:
+        player = Player.objects.get(user=request.user, game__active=True)
+        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                             'url': reverse('forms:cynic_list')})
 
 @notifier
 def logs(request):
@@ -946,7 +1014,6 @@ def configure_game(request):
         messages.success(request, "Paired GNs successfully.")
 
     if request.POST and 'purpose' in request.POST and request.POST['purpose'] == 'start':
-        print "starting game"
         messages.success(request, "Game started successfully. Players "  # have been notified by e-mail and
                                   " can now log in.")
         # TODO email the players

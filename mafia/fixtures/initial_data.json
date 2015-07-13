@@ -82,6 +82,15 @@
     },
     {
         "fields": {
+            "evil_by_default": false,
+            "name": "Cynic",
+            "description": "Before the start of each day, the Cynic may designate up to 3 players for their cynic list. Mods will assume the list is unchanged unless told otherwise. If anyone on their cynic list dies while on the list, the Cynic becomes immune to \u201cBANG\u201d and \u201cKABOOM\u201d the next day.\r\n"
+        },
+        "model": "mafia.role",
+        "pk": 11
+    },
+    {
+        "fields": {
             "username": "admin",
             "first_name": "",
             "last_name": "",
