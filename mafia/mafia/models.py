@@ -117,7 +117,8 @@ class Game(models.Model):
                 choices.append((player, votes, sum(v.value for v in votes)))
         if choices:
             choices.sort(key=lambda c: -c[2])
-            lynches = (choices[0][0],)
+            lynch_value = choices[0][2]
+            lynches = tuple(ch[0] for ch in choices if ch[2]==lynch_value)
             if lynches[0] == NO_LYNCH:
                 return [], choices
             return lynches, choices
