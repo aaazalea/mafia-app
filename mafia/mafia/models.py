@@ -105,6 +105,7 @@ class Game(models.Model):
                  list of tuples (lynchee, num votes)
         """
         # TODO tiebreaker logic
+        # TODO mayor triple vote
         no_lynch_votes = [p.lynch_vote_made(day) for p in self.living_players if
                           p.lynch_vote_made(day) and not p.lynch_vote_made(day).lynchee]
         choices = [(NO_LYNCH, no_lynch_votes, sum(v.value for v in no_lynch_votes))]
@@ -742,21 +743,13 @@ class Player(models.Model):
         self.elected_roles.remove(position)
         self.notify("You've been impeached! You're no longer the %s." % position)
 
-        if self.is_mafia_don() and position.name == "Mayor":
-            self.elected_roles.remove(ElectedRole.objects.get(name="Don"))
-
         self.save()
-        self.game.log(anonymous_message="%s is has been impeached from being %s" % (self, position))
+        self.game.log(anonymous_message="%s has been impeached from being %s" % (self, position))
 
     def elect(self, position):
         self.elected_roles.add(position)
         self.game.log(anonymous_message="%s was elected to the position of %s." % (self, position))
         self.notify("You've been elected as the new %s" % position, bad=False)
-
-        if self.is_evil() and position.name == "Mayor":
-            self.elected_roles.add(ElectedRole.objects.get(name="Don"))
-            self.notify("You're now the mafia don. Muahahaha.", bad=False)
-            self.game.log("%s has become the mafia don. Muahahahaha." % self, mafia_can_see=True)
 
         self.save()
 
@@ -764,11 +757,6 @@ class Player(models.Model):
         self.conscripted = True
         self.notify("You've been conscripted into the mafia. "
                     "Congratulations on your excellent life choices.", bad=False)
-        if self.elected_roles.filter(name="Mayor").exists():
-            self.elected_roles.add(ElectedRole.get(name="Don"))
-            self.notify("You're now the mafia don. Muahahaha.", bad=False)
-            self.game.log("%s has become the mafia don. Muahahahaha." % self, mafia_can_see=True)
-            self.save()
         self.save()
 
 
@@ -896,16 +884,16 @@ class Death(models.Model):
                             item.save()
 
                 if self.murderer.is_mafia_don():
-                    # TODO conscripted vigilante mayor loses don powers with civilian killings
                     don_kills = Death.objects.filter(murderee__game=self.murderee.game, made_by_don=True,
                                                      murderer=self.murderer).order_by('-when')
                     mafia_kills = Death.objects.filter(Q(murderer__role__name="Mafia") | Q(murderer__conscripted=True),
                                                        murderee__game=self.murderer.game).order_by('-when')
-                    if don_kills.exists() and mafia_kills.exists() and don_kills[0] == mafia_kills[0]:
+                    if don_kills.exists() and mafia_kills.exists() and (
+                                    don_kills[0] == mafia_kills[0] or (len(mafia_kills) > 1 and don_kills[0] == mafia_kills[1])):
                         self.murderer.elected_roles.remove(ElectedRole.objects.get(name="Don"))
-                        self.murderer.notify("You made 2 kills in a row, so you're no longer the mafia don.")
+                        self.murderer.notify("You made 2 of 3 kills in a row, so you're no longer the mafia don.")
                         self.murderer.game.log(
-                            "%s made 2 kills in a row and has lost the power of being mafia don." % self.murderer,
+                            "%s made 2 of 3 kills in a row and has lost the power of being mafia don." % self.murderer,
                             mafia_can_see=True)
                         self.murderer.save()
                     self.made_by_don = True
@@ -921,7 +909,7 @@ class Death(models.Model):
                     for watchlist in self.murderer.watched_by.filter(day=self.murderer.game.current_day):
                         self.update_clue_pile(watchlist.owner, watchlist=True)
                         watchlist.owner.notify("You gain 3 clues from the death of %s" % self.murderee)
-                        watchlist.owner.log("%s gains 3 clues from the death of %s" % self.murderee)
+                        watchlist.owner.log("%s gains 3 clues from the death of %s" % (watchlist.owner, self.murderee))
 
             elif CLUES_IN_USE:
                 self.total_clues = 0
@@ -998,8 +986,10 @@ class CluePile(models.Model):
 
     def uncheckable(self):
         # TODO fix time zone awareness issue
+        if not self.collected:
+            return False
         elapsed = now() - self.last_checked
-        return self.collected and elapsed.seconds < 3600
+        return elapsed.seconds < 3600
 
     def local_text(self):
         if self.collected:
