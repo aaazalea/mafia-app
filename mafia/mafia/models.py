@@ -117,7 +117,8 @@ class Game(models.Model):
                 choices.append((player, votes, sum(v.value for v in votes)))
         if choices:
             choices.sort(key=lambda c: -c[2])
-            lynches = (choices[0][0],)
+            lynch_value = choices[0][2]
+            lynches = tuple(ch[0] for ch in choices if ch[2]==lynch_value)
             if lynches[0] == NO_LYNCH:
                 return [], choices
             return lynches, choices
@@ -429,7 +430,7 @@ class Player(models.Model):
             relevant_clues = CluePile.objects.filter(investigator=self, target=target)
             if relevant_clues.exists() and relevant_clues[0].uncheckable():
                 return False
-            if target.is_alive() or not target.death.murderer:
+            if target.is_alive() or (not MafiaPower.objects.filter(target=target,power=MafiaPower.HIRE_A_HITMAN).exists() and not target.death.murderer):
                 return False
         if self.role == Role.objects.get(name__iexact='investigator'):
             return True
@@ -748,7 +749,10 @@ class Player(models.Model):
 
     def elect(self, position):
         self.elected_roles.add(position)
-        self.game.log(anonymous_message="%s was elected to the position of %s." % (self, position))
+        if position.name != "Don":
+            self.game.log(anonymous_message="%s was elected to the position of %s." % (self, position))
+        else:
+            self.game.log(message="%s was elected to the position of %s." % (self, position), mafia_can_see=True)
         self.notify("You've been elected as the new %s" % position, bad=False)
 
         self.save()
@@ -902,9 +906,9 @@ class Death(models.Model):
                     if MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
                         self.total_clues = 0
                     else:
-                        self.total_clues = 1 + sum(
-                            p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
-                            self.murderee.game.living_players)
+                        self.total_clues = 2 #1 + sum(
+                            #p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
+                            #self.murderee.game.living_players)
 
                     for watchlist in self.murderer.watched_by.filter(day=self.murderer.game.current_day):
                         self.update_clue_pile(watchlist.owner, watchlist=True)
@@ -1037,6 +1041,9 @@ class Investigation(models.Model):
 
     def is_correct(self):
         if self.result == -1:
+            if self.death.murderee.mafiapowers_targeted_set.filter(power=MafiaPower.HIRE_A_HITMAN).exists():
+                self.death.murderer = self.death.murderee
+
             self.result = (self.death.murderer == self.guess and self.death.is_investigable(self.investigation_type))
 
             if self.investigation_type != Investigation.GAY_KNIGHT:

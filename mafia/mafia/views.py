@@ -280,7 +280,7 @@ def recent_deaths(request):
             if player.is_evil() or player.role.name == "Rogue":
                 destructibles = Death.objects.filter(murderee__game__active=True, total_clues__gt=-1).exclude(
                     clue_destroyers=player)
-            for death in Death.objects.filter(murderee__game__active=True):
+            for death in Death.objects.filter(Q(murderer__game__active=True)|Q(murderee__mafiapowers_targeted_set__power=MafiaPower.HIRE_A_HITMAN)):
                 if player.can_collect_clues(death.murderee):
                     gatherables.append(death)
     else:
@@ -446,10 +446,10 @@ def items(request):
     if request.POST:
         form = Form(request.POST)
         if form.is_valid():
-            item_to_use = form.cleaned_data['item']
+            item_to_use = Item.objects.get(id=int(form.data['item']))
             if not item_to_use.used:
-                if 'target' in form.cleaned_data:
-                    target = form.cleaned_data['target']
+                if 'target' in form.data:
+                    target = form.data['target']
                     messages.info(request, "Item used: %s. Target: %s" % (item_to_use, target))
                     item_to_use.use(target)
                 else:
@@ -918,7 +918,7 @@ def old_logs(request, game_id):
     if not game.archived:
         return HttpResponseRedirect("/")
     game_logs = [(log_item.get_text(game.god), log_item.time, log_item.is_day_start()) for log_item in
-                 game.logitem_set.all()]
+                 game.logitem_set.all() if log_item.get_text(game.god)]
     game_logs.sort(key=lambda a: a[1])
     try:
         current_game = Game.objects.get(active=True)
@@ -1129,7 +1129,7 @@ def hitman_success(request):
             Death.objects.create(when=when, murderer=None, murderee=killed, kaboom=kaboom,
                                  day=killed.game.current_day, where=where)
             game.log(message="Hitman %s killed %s" % (hitman.comment, hitman.target),
-                     anonymous_message="% was killed at %s" % (killed, where), mafia_can_see=True)
+                     anonymous_message="%s was killed at %s" % (killed, where), mafia_can_see=True)
             hitman.other_info = 1
             hitman.save()
             return HttpResponseRedirect("/")

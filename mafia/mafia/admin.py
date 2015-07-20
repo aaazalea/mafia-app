@@ -25,7 +25,9 @@ class PlayerInline(admin.TabularInline):
     fields = ("user", "role")
     model = Player
     extra = 0
-
+class PlayerAdmin(admin.ModelAdmin):
+    list_display = ('user','role','game')
+admin.site.register(Player, PlayerAdmin)
 
 class MafiaPowerInline(admin.TabularInline):
     fields = ('power',)

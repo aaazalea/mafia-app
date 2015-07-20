@@ -40,7 +40,7 @@ class DeathModelChoiceField(forms.ModelChoiceField):
 
 class InvestigationForm(forms.Form):
     death = DeathModelChoiceField(
-        queryset=Death.objects.filter(murderer__game__active=True),
+        queryset=Death.objects.filter(Q(murderer__game__active=True)|Q(murderee__mafiapowers_targeted_set__power=MafiaPower.HIRE_A_HITMAN)).distinct(),
         label="Which death would you like to investigate?",
     )
     guess = PlayerModelChoiceField(
