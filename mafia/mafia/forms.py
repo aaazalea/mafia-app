@@ -40,7 +40,9 @@ class DeathModelChoiceField(forms.ModelChoiceField):
 
 class InvestigationForm(forms.Form):
     death = DeathModelChoiceField(
-        queryset=Death.objects.filter(Q(murderer__game__active=True)|(Q(murderee__mafiapowers_targeted_set__power=MafiaPower.HIRE_A_HITMAN)&Q(murderee__game__active=True)).distinct(),
+        queryset=Death.objects.filter(Q(murderer__game__active=True) | (
+            Q(murderee__mafiapowers_targeted_set__power=MafiaPower.HIRE_A_HITMAN) & Q(
+                murderee__game__active=True))).distinct(),
         label="Which death would you like to investigate?",
     )
     guess = PlayerModelChoiceField(
@@ -98,7 +100,8 @@ class MafiaPowerForm(forms.Form):
                     MafiaPower.objects.filter(power=MafiaPower.SET_A_TRAP, state=MafiaPower.SET, game__active=True)):
                 raise ValidationError(
                     "The maximum number of set a trap charges (%s) is already in use." % TRAPS_AT_A_TIME)
-            if MafiaPower.objects.filter(power=MafiaPower.SET_A_TRAP, game__active=True, day_used=charge.game.current_day).exists():
+            if MafiaPower.objects.filter(power=MafiaPower.SET_A_TRAP, game__active=True,
+                                         day_used=charge.game.current_day).exists():
                 raise ValidationError(
                     "A trap has already been set today. Wait to set another one tomorrow.")
         response = "Power executed successfully: %s" % charge.get_power_name()
@@ -139,6 +142,11 @@ class MafiaPowerForm(forms.Form):
                 death = a[0]
                 death.total_clues = 0
                 death.save()
+        elif charge.power == MafiaPower.ELECT_A_DON:
+            if not charge.target.is_evil():
+                raise ValidationError(
+                    "That player is not a mafia member. You probably don't want them running the show.")
+            charge.target.elect(ElectedRole.objects.get(name="Don"))
         charge.save()
 
         charge.target.game.log(message=charge.get_log_message(), mafia_can_see=True)
@@ -170,9 +178,12 @@ class ConspiracyListForm(forms.Form):
         return self.cleaned_data['new_conspiracy_list']
 
     def clean(self):
-        if self.cleaned_data['backup1'] and (self.cleaned_data['backup1'] == self.cleaned_data['backup2'] or self.cleaned_data['backup3'] == self.cleaned_data['backup1']) or (self.cleaned_data['backup2'] and self.cleaned_data['backup2'] == self.cleaned_data['backup3']):
+        if self.cleaned_data['backup1'] and (
+                        self.cleaned_data['backup1'] == self.cleaned_data['backup2'] or self.cleaned_data['backup3'] ==
+                    self.cleaned_data['backup1']) or (
+                    self.cleaned_data['backup2'] and self.cleaned_data['backup2'] == self.cleaned_data['backup3']):
             raise ValidationError(
-                    "You should not have multiple identical backups")
+                "You should not have multiple identical backups")
 
 
 class CynicListForm(forms.Form):
@@ -199,10 +210,12 @@ class CynicListForm(forms.Form):
         return self.cleaned_data['new_cynic_list']
 
     def clean(self):
-        if self.cleaned_data['backup1'] and (self.cleaned_data['backup1'] == self.cleaned_data['backup2'] or self.cleaned_data['backup3'] == self.cleaned_data['backup1']) or (self.cleaned_data['backup2'] and self.cleaned_data['backup2'] == self.cleaned_data['backup3']):
+        if self.cleaned_data['backup1'] and (
+                        self.cleaned_data['backup1'] == self.cleaned_data['backup2'] or self.cleaned_data['backup3'] ==
+                    self.cleaned_data['backup1']) or (
+                    self.cleaned_data['backup2'] and self.cleaned_data['backup2'] == self.cleaned_data['backup3']):
             raise ValidationError(
-                    "You should not have multiple identical backups")
-
+                "You should not have multiple identical backups")
 
 
 class InnocentChildRevealForm(forms.Form):
@@ -222,7 +235,7 @@ class ElectForm(forms.Form):
     player_elected = forms.ModelChoiceField(Player.objects.filter(death__isnull=True, game__active=True),
                                             label="Who is being elected?")
     position = forms.ModelChoiceField(ElectedRole.objects.all(),
-        label="What position are they being elected to?")
+                                      label="What position are they being elected to?")
 
 
 class HitmanSuccessForm(forms.Form):
