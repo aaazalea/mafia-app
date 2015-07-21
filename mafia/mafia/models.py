@@ -888,6 +888,7 @@ class Death(models.Model):
                             item.save()
 
                 if self.murderer.is_mafia_don():
+                    self.made_by_don = True
                     don_kills = Death.objects.filter(murderee__game=self.murderee.game, made_by_don=True,
                                                      murderer=self.murderer).order_by('-when')
                     mafia_kills = Death.objects.filter(Q(murderer__role__name="Mafia") | Q(murderer__conscripted=True),
@@ -899,8 +900,8 @@ class Death(models.Model):
                         self.murderer.game.log(
                             "%s made 2 of 3 kills in a row and has lost the power of being mafia don." % self.murderer,
                             mafia_can_see=True)
+                        self.made_by_don = False
                         self.murderer.save()
-                    self.made_by_don = True
 
                 if CLUES_IN_USE:
                     if MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
@@ -1197,6 +1198,7 @@ class MafiaPower(models.Model):
     MANIPULATE_THE_PRESS = 8
     HIRE_A_HITMAN = 9
     CONSCRIPTION = 10
+    ELECT_A_DON = 11
     MAFIA_POWER_TYPE = [
         (KABOOM, "KABOOM!"),
         (SCHEME, "Scheme"),
@@ -1207,7 +1209,8 @@ class MafiaPower(models.Model):
         (PLANT_EVIDENCE, "Plant Evidence"),
         (MANIPULATE_THE_PRESS, "Manipulate the Press"),
         (HIRE_A_HITMAN, "Hire a Hitman"),
-        (CONSCRIPTION, "Conscription")
+        (CONSCRIPTION, "Conscription"),
+        (ELECT_A_DON, "Elect a Don")
     ]
 
     target = models.ForeignKey(Player, null=True, related_name="mafiapowers_targeted_set")
@@ -1334,6 +1337,8 @@ class MafiaPower(models.Model):
         elif self.power == MafiaPower.CONSCRIPTION:
             return "%s made %s an offer they couldn't refuse. %s has been conscripted into the mafia." % (
                 self.user, self.target, self.target)
+        elif self.power == MafiaPower.ELECT_A_DON:
+            return "The mafia have elected %s as their don." % self.target
 
 
 class ConspiracyList(models.Model):
