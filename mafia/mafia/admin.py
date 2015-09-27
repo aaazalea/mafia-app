@@ -19,14 +19,24 @@ admin.site.register(Role, RoleAdmin)
 #
 #
 # admin.site.register(Death, DeathAdmin)
-
+#from django.utils import strip_tags
 
 class PlayerInline(admin.TabularInline):
     fields = ("user", "role")
     model = Player
     extra = 0
 class PlayerAdmin(admin.ModelAdmin):
-    list_display = ('user','role','game')
+    def html_image(self, item):
+        return "<img src='%s' width='150'>" % (item.photo)
+    html_image.short_description = 'Picture'
+    html_image.allow_tags = True
+    def desc(self, item): 
+       return ("(ARCHIVED) " if item.game.archived else "") + item.user.username + ((" (" + item.role.name + ")") if item.role else "")
+    desc.short_description = "Player"
+    intro = lambda s, p: p.introduction.replace('\n','<br>\n')
+    intro.short_description = "Introduction"
+    intro.allow_tags = True
+    list_display = ('desc', 'html_image', 'intro')
 admin.site.register(Player, PlayerAdmin)
 
 class MafiaPowerInline(admin.TabularInline):
