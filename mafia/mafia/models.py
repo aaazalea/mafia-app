@@ -907,9 +907,9 @@ class Death(models.Model):
                     if MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
                         self.total_clues = 0
                     else:
-                        self.total_clues = 2 #1 + sum(
-                            #p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
-                            #self.murderee.game.living_players)
+                        self.total_clues = 1 + sum(
+                            p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
+                            self.murderee.game.living_players)
 
                     for watchlist in self.murderer.watched_by.filter(day=self.murderer.game.current_day):
                         self.update_clue_pile(watchlist.owner, watchlist=True)
