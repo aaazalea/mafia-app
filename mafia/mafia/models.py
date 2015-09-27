@@ -105,7 +105,6 @@ class Game(models.Model):
                  list of tuples (lynchee, num votes)
         """
         # TODO tiebreaker logic
-        # TODO mayor triple vote
         no_lynch_votes = [p.lynch_vote_made(day) for p in self.living_players if
                           p.lynch_vote_made(day) and not p.lynch_vote_made(day).lynchee]
         choices = [(NO_LYNCH, no_lynch_votes, sum(v.value for v in no_lynch_votes))]
@@ -118,7 +117,7 @@ class Game(models.Model):
         if choices:
             choices.sort(key=lambda c: -c[2])
             lynch_value = choices[0][2]
-            lynches = tuple(ch[0] for ch in choices if ch[2]==lynch_value)
+            lynches = tuple(ch[0] for ch in choices if ch[2] == lynch_value)
             if lynches[0] == NO_LYNCH:
                 return [], choices
             return lynches, choices
