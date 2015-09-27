@@ -6,10 +6,7 @@ from django.core.urlresolvers import reverse
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
-from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
-    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
-    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, LYNCH_WORD, LYNCH_VERB, ELECTRONIC_IC_REVEAL, \
-    ITEM_REDISTRIBUTE_ANNOUNCE
+from settings import *
 from django.utils.timezone import now
 
 NO_LYNCH = "No " + LYNCH_WORD
@@ -86,7 +83,11 @@ class Game(models.Model):
     def kill_day_end(self, player, why, log_message=True):
         Death.objects.create(murderee=player, when=now(), where=why, day=self.current_day)
         if log_message:
-            self.log(anonymous_message="%s dies of %s (end day %d)" % (player, why, self.current_day))
+            if HIDE_WHY:
+                self.log(anonymous_message="%s dies (end day %d)"       % (player, self.current_day),
+                                   message="%s dies of %s (end day %d)" % (player, why, self.current_day))
+            else:
+                self.log(anonymous_message="%s dies of %s (end day %d)" % (player, why, self.current_day))
 
         # redistribute items
         for item in player.item_set.all():
