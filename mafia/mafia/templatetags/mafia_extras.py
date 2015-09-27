@@ -1,6 +1,6 @@
 from django import template
 from mafia.models import NO_LYNCH, Player
-from mafia.settings import HIDE_WHY
+from mafia.settings import HIDE_WHY, LYNCH_WORD
 from django.contrib.auth.models import AnonymousUser
 
 register = template.Library()
@@ -25,7 +25,7 @@ def get_lynch(value, arg):
     if choices:
         return ", ".join(a.username for a in choices)
     else:
-        return "No lynch"
+        return "No " + LYNCH_WORD.lower()
 
 
 @register.filter
@@ -55,11 +55,10 @@ def locationfor(death, user):
     if any((
         user == game.god,  # full permissions
         death.murderer,  # it's a murder
-        not HIDE_WHY  # everyone can see why
+        not HIDE_WHY,  # everyone can see why
+        death.where[:len(LYNCH_WORD)] == LYNCH_WORD  # Lynches are public
     )):
         return death.where
-    if death.where[:5] == "Lynch":
-        return death.where  # Lynches are public
     # If user is dead
     if (not isinstance(user, AnonymousUser)) and Player.objects.filter(death__isnull=False, user=user, game=game).exists():
         return death.where

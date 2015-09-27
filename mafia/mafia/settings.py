@@ -148,3 +148,6 @@ TRAPS_AT_A_TIME = 2
 
 # Whether reasons for EOD deaths are shown
 HIDE_WHY = True
+
+LYNCH_WORD = "Execution" # "Lynch"
+LYNCH_VERB = "execute" # "lynch"

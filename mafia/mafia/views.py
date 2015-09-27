@@ -26,7 +26,7 @@ from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteF
     WatchListForm
 from django.shortcuts import render
 import requests
-from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
+from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE, LYNCH_WORD, LYNCH_VERB
 from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, MafiaPower, Notification, \
     SuperheroDay, GayKnightPair, ElectedRole, CluePile
 from django.core.urlresolvers import reverse
@@ -69,7 +69,10 @@ request_is_god = lambda r: Game.objects.filter(god=r.user).exists()
 
 @notifier
 def index(request):
-    params = {}
+    params = {
+        'LYNCH_WORD': LYNCH_WORD,
+        'LYNCH_VERB': LYNCH_VERB
+    }
     if request.user.username == "admin":
         return HttpResponseRedirect("/admin/mafia/game")
     try:
@@ -383,23 +386,24 @@ def daily_lynch(request, day):
 
     if day >= game.current_day:
         messages.add_message(request, messages.ERROR,
-                             "It's only day <b>%d</b>, you can't see day <b>%d</b>'s lynch yet." % (
-                                 game.current_day, day))
+                             "It's only day <b>%d</b>, you can't see day <b>%d</b>'s %s yet." % (
+                                 game.current_day, day, LYNCH_WORD))
         return HttpResponseRedirect('/')
 
     lynches, choices = game.get_lynch(day)
 
     if len(lynches) == 0:
-        lynch_str = "No lynch"
+        lynch_str = "No " + LYNCH_WORD
     elif len(lynches) == 1:
-        lynch_str = "%s is lynched." % lynches[0].username
+        lynch_str = "%s is %sed." % (lynches[0].username, LYNCH_VERB)
     else:
-        lynch_str = ", ".join(a.username for a in lynches) + " are lynched."
+        lynch_str = ", ".join(a.username for a in lynches) + " are %sed." % LYNCH_VERB
 
     return render(request, 'daily_lynch.html', {'lynch_str': lynch_str,
                                                 'choices': choices,
                                                 'game': game,
                                                 'day': day,
+                                                'LYNCH_WORD': LYNCH_WORD,
                                                 'player': player})
 
 
@@ -420,9 +424,9 @@ def lynch_vote(request):
                 vote = LynchVote.objects.create(voter=player, lynchee=vote_value, time_made=now(),
                                                 day=game.current_day)
                 if vote_value:
-                    vote_message = "%s voted to lynch %s" % (player, vote_value)
+                    vote_message = "%s voted to %s %s" % (player, LYNCH_VERB, vote_value)
                 else:
-                    vote_message = "%s voted for no lynch" % player
+                    vote_message = "%s voted for no %s" % (player, LYNCH_WORD)
                 if player.elected_roles.filter(name="Mayor").exists():
                     vote.value = 3
                     vote.save()
@@ -434,7 +438,7 @@ def lynch_vote(request):
         else:
             form = LynchVoteForm()
 
-            return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Vote to Lynch Someone',
+            return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Vote to %s Someone' % (LYNCH_VERB[0].upper() + LYNCH_VERB[1:]),
                                                  'url': reverse('forms:vote')})
     else:
         messages.add_message(request, messages.ERROR, "Dead people don't vote. :(")

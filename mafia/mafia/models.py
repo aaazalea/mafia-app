@@ -8,10 +8,10 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
-    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT
+    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, LYNCH_WORD, LYNCH_VERB
 from django.utils.timezone import now
 
-NO_LYNCH = "No lynch"
+NO_LYNCH = "No " + LYNCH_WORD
 
 
 class Game(models.Model):
@@ -58,8 +58,8 @@ class Game(models.Model):
             if Death.objects.filter(murderer__game=self).exists():
                 lynches, choices = self.get_lynch(self.current_day)
                 for lynched in lynches:
-                    self.kill_day_end(lynched, "Lynch (day %d)" % self.current_day, log_message=False)
-                    self.log(anonymous_message="%s was lynched (end day %d)" % (lynched, self.current_day))
+                    self.kill_day_end(lynched, "%s (day %d)" % (LYNCH_WORD, self.current_day), log_message=False)
+                    self.log(anonymous_message="%s was %sed (end day %d)" % (lynched, LYNCH_VERB, self.current_day))
 
             # note that end-of-day deaths happen *after* lynches
             for player in self.living_players:

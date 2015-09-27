@@ -51,10 +51,10 @@
                     <tr>
                         <td>{{ day }}</td>
                         <td>{% if day != player.game.current_day %}{{ player|get_vote:day }}{% else %}{% if vote %}
-                            {% if vote.lynchee %}Today, you voted to lynch <b>{{ vote.lynchee }}</b>{% else %}Today, you
-                                voted for <b>no lynch</b> {% endif %} (<a href="{% url "forms:vote" %}">change</a>).
+                            {% if vote.lynchee %}Today, you voted to {{ LYNCH_VERB }} <b>{{ vote.lynchee }}</b>{% else %}Today, you
+                                voted for <b>no {{ LYNCH_WORD }}</b> {% endif %} (<a href="{% url "forms:vote" %}">change</a>).
                         {% else %}
-                            <a href="{% url 'forms:vote' %}">Click here to vote for a person to lynch.</a>
+                            <a href="{% url 'forms:vote' %}">Click here to vote for a person to {{ LYNCH_VERB }}.</a>
                         {% endif %}
                         {% endif %}</td>
                         <td>{% if day != player.game.current_day %}<a href="{% url 'daily_lynch' day %}">
@@ -69,11 +69,11 @@
         <p>
         <table class="table table-bordered">
             <tr>
-                <th colspan="2">Lynch History</th>
+                <th colspan="2">{{ LYNCH_WORD }} History</th>
             </tr>
             <tr>
                 <th>Day</th>
-                <th>Lynch Result</th>
+                <th>{{ LYNCH_WORD }} Result</th>
             </tr>
             {% for day in game.current_day|get_xrange1 %}
                 {% if day != game.current_day %}
