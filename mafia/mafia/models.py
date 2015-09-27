@@ -8,7 +8,8 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
-    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, LYNCH_WORD, LYNCH_VERB, ELECTRONIC_IC_REVEAL
+    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, LYNCH_WORD, LYNCH_VERB, ELECTRONIC_IC_REVEAL, \
+    ITEM_REDISTRIBUTE_ANNOUNCE
 from django.utils.timezone import now
 
 NO_LYNCH = "No " + LYNCH_WORD
@@ -91,8 +92,14 @@ class Game(models.Model):
         for item in player.item_set.all():
             recipient = random.choice(self.living_players.all())
             item.owner = recipient
-            self.log(anonymous_message="%s redistributed from %s to %s (end day %d)" %
-                                       (item.get_name(), player, recipient, self.current_day))
+            if ITEM_REDISTRIBUTE_ANNOUNCE:
+                self.log(anonymous_message="%s redistributed from %s to %s (end day %d)" %
+                                           (item.get_name(), player, recipient, self.current_day))
+            else:
+                self.log(message="%s redistributed from %s to %s (end day %d)" %
+                                 (item.get_name(), player, recipient, self.current_day),
+                         users_who_can_see=[recipient])
+
             item.save()
 
     def has_user(self, user):
@@ -429,7 +436,8 @@ class Player(models.Model):
             relevant_clues = CluePile.objects.filter(investigator=self, target=target)
             if relevant_clues.exists() and relevant_clues[0].uncheckable():
                 return False
-            if target.is_alive() or (not MafiaPower.objects.filter(target=target,power=MafiaPower.HIRE_A_HITMAN).exists() and not target.death.murderer):
+            if target.is_alive() or (not MafiaPower.objects.filter(target=target,
+                                                                   power=MafiaPower.HIRE_A_HITMAN).exists() and not target.death.murderer):
                 return False
         if self.role == Role.objects.get(name__iexact='investigator'):
             return True
@@ -596,7 +604,6 @@ class Player(models.Model):
                 tomorrow.save()
                 consp_list = tomorrow
 
-
             count_dead = 0
             if CONSPIRACY_LIST_SIZE_IS_PERCENT:
                 list_size = math.ceil(self.game.number_of_living_players * 0.01 * CONSPIRACY_LIST_SIZE)
@@ -676,7 +683,7 @@ class Player(models.Model):
             if not (cyn_list.drop and cyn_list.drop.is_alive()):
                 cyn_list.drop = cyn_list.cynicized.first()
             (cyn_list.backup1, cyn_list.backup2, cyn_list.backup3) = (backups + [None, None, None])[
-                                                                           count_dead:count_dead + 3]
+                                                                     count_dead:count_dead + 3]
 
             cyn_list.save()
 
@@ -799,7 +806,7 @@ class Death(models.Model):
                                 self.murderer.role.name == "Gay Knight"
                         and Death.objects.filter(murderee=self.murderer.gn_partner,
                                                  murderer=self.murderee).exists() and self.murderer.investigation_set.filter(
-                        guess=self.murderee).exists()))):
+                            guess=self.murderee).exists()))):
                 if self.murderer and not self.murderer.is_evil():
                     raise Exception("Non-mafia attempt to use a kaboom without being police officer or vengeful knight")
 
@@ -893,7 +900,8 @@ class Death(models.Model):
                     mafia_kills = Death.objects.filter(Q(murderer__role__name="Mafia") | Q(murderer__conscripted=True),
                                                        murderee__game=self.murderer.game).order_by('-when')
                     if don_kills.exists() and mafia_kills.exists() and (
-                                    don_kills[0] == mafia_kills[0] or (len(mafia_kills) > 1 and don_kills[0] == mafia_kills[1])):
+                                    don_kills[0] == mafia_kills[0] or (
+                                            len(mafia_kills) > 1 and don_kills[0] == mafia_kills[1])):
                         self.murderer.elected_roles.remove(ElectedRole.objects.get(name="Don"))
                         self.murderer.notify("You made 2 of 3 kills in a row, so you're no longer the mafia don.")
                         self.murderer.game.log(
@@ -1429,7 +1437,7 @@ class SuperheroDay(models.Model):
         """
         # TODO check if this actually works
         return self.paranoia and (
-        not self.paranoia.is_alive()) and self.paranoia.death.day == self.owner.game.current_day - 1
+            not self.paranoia.is_alive()) and self.paranoia.death.day == self.owner.game.current_day - 1
 
     def __str__(self):
         if self.superhero_identity:

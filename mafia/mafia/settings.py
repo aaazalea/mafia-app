@@ -154,3 +154,6 @@ LYNCH_VERB = "execute"  # "lynch"
 
 # Is electronic IC trust action allowed, or only in person?
 ELECTRONIC_IC_REVEAL = False
+
+# Are items publicly or privately redistributed?
+ITEM_REDISTRIBUTE_ANNOUNCE = False
