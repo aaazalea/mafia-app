@@ -67,8 +67,9 @@
                                     <li><a href="{% url 'advance_day' %}">Advance Day</a></li>
                                     <li><a href="{% url 'end_game' %}">End Game</a></li>
                                     <li><a href="{% url 'forms:cctv_death' %}">Notify CCTV holder</a></li>
-                                    <li class="divider"></li>
                                     <li><a href="{% url 'forms:elect' %}">Submit a petition</a></li>
+                                    <li class="divider"></li>
+                                    <li><a href="{% url 'admin:index' %}">Admin Panel</a></li>
                                 {% for person in game.elected_people %}
                                     <li><a href="{% url 'impeach' person.0.id person.1.id %}">Impeach {{ person.0 }} as {{ person.1 }}</a></li>
                                 {% endfor %}
