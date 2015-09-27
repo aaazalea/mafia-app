@@ -1,6 +1,7 @@
 from django import template
-from mafia.models import NO_LYNCH
-
+from mafia.models import NO_LYNCH, Player
+from mafia.settings import HIDE_WHY
+from django.contrib.auth.models import AnonymousUser
 
 register = template.Library()
 
@@ -47,3 +48,20 @@ def get_xrange1(value):
         Instead of 3 one may use the variable set in the views
     """
     return xrange(1, value + 1)
+
+@register.filter
+def locationfor(death, user):
+    game = death.murderee.game
+    if any((
+        user == game.god,  # full permissions
+        death.murderer,  # it's a murder
+        not HIDE_WHY  # everyone can see why
+    )):
+        return death.where
+    if death.where[:5] == "Lynch":
+        return death.where  # Lynches are public
+    # If user is dead
+    if (not isinstance(user, AnonymousUser)) and Player.objects.filter(death__isnull=False, user=user, game=game).exists():
+        return death.where
+    else:
+        return ""

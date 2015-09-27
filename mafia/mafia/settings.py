@@ -145,3 +145,6 @@ KABOOMS_REGENERATE = True
 TRAPS_REGENERATE = False
 
 TRAPS_AT_A_TIME = 2
+
+# Whether reasons for EOD deaths are shown
+HIDE_WHY = True

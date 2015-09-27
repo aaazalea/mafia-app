@@ -17,7 +17,7 @@
         {% for death in deaths %}
             <tr>
                 <td>{{ death.murderee.user.username }}</td>
-                <td>{{ death.where }}</td>
+                <td>{{ death|locationfor:user }}</td>
                 <td>{{ death.when|date:"M d, P" }}</td>
                 {% if god %}
                     <td>{{ death.murderer.user.username }}</td>
