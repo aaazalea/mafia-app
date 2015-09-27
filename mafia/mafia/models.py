@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
-    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, LYNCH_WORD, LYNCH_VERB
+    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, LYNCH_WORD, LYNCH_VERB, ELECTRONIC_IC_REVEAL
 from django.utils.timezone import now
 
 NO_LYNCH = "No " + LYNCH_WORD
@@ -714,7 +714,7 @@ class Player(models.Model):
             elif MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.USED, game__active=True,
                                            day_used=self.game.current_day - 1, other_info=0).exists():
                 links.append((reverse("forms:hitman_success"), "Report a kill on behalf of your hitman."))
-        if self.role == Role.objects.get(name="Innocent Child"):
+        if ELECTRONIC_IC_REVEAL and self.role == Role.objects.get(name="Innocent Child"):
             links.append((reverse('forms:ic_reveal'), "Trust someone"))
         elif self.role == Role.objects.get(name="Superhero"):
             links.append((reverse('forms:superhero'), "Choose identity"))

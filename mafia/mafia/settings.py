@@ -149,5 +149,8 @@ TRAPS_AT_A_TIME = 2
 # Whether reasons for EOD deaths are shown
 HIDE_WHY = True
 
-LYNCH_WORD = "Execution" # "Lynch"
-LYNCH_VERB = "execute" # "lynch"
+LYNCH_WORD = "Execution"  # "Lynch"
+LYNCH_VERB = "execute"  # "lynch"
+
+# Is electronic IC trust action allowed, or only in person?
+ELECTRONIC_IC_REVEAL = False
