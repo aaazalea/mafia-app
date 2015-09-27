@@ -25,6 +25,7 @@ urlpatterns = patterns('',
 
 
                        url(r'^rogue-disarmed/$', 'mafia.views.rogue_disarmed', name='rogue_disarmed'),
+                       url(r'^vig-disarmed/$', 'mafia.views.vig_disarmed', name='vig_disarmed'),
                        url(r'^count-the-mafia/$', 'mafia.views.count_the_mafia', name='count_the_mafia'),
                        url(r'^go-desperado/$', 'mafia.views.go_desperado', name='go_desperado'),
                        url(r'^undo-desperado/$', 'mafia.views.undo_desperado', name='undo_desperado'),

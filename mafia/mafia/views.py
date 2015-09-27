@@ -360,7 +360,6 @@ def investigation_form(request):
     return HttpResponseRedirect("/")
 
 
-@notifier
 @login_required
 @user_passes_test(
     lambda user: user.is_authenticated() and Player.objects.filter(user=user, death=None, game__active=True,
@@ -372,6 +371,19 @@ def rogue_disarmed(request):
     p.game.log(message="%s was disarmed by a mafia member." % p, users_who_can_see=[p], mafia_can_see=True)
     p.save()
     return HttpResponseRedirect("/")
+
+@login_required
+@user_passes_test(
+    lambda user: user.is_authenticated() and Player.objects.filter(user=user, death=None, game__active=True,
+                                                                   role__name="Vigilante").exists(),
+    login_url='/')
+def vig_disarmed(request):
+    p = Player.objects.get(user=request.user, game__active=True)
+    p.role_information = 1
+    p.game.log(message="%s failed to kill someone." % p, users_who_can_see=[p])
+    p.save()
+    return HttpResponseRedirect("/")
+
 
 
 @notifier

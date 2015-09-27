@@ -531,7 +531,7 @@ class Player(models.Model):
                 elif kill.day == self.game.current_day:
                     # can't kill again today
                     return False
-            return True
+            return not self.role_information
         elif self.role == Role.objects.get(name__iexact='gay knight'):
             if not self.gn_partner.is_alive():
                 if Investigation.objects.filter(investigator=self, guess=self.gn_partner.death.murderer).exists():
@@ -701,7 +701,8 @@ class Player(models.Model):
             links.append((reverse('forms:kill'), "Report a kill you made"))
             if self.role == Role.objects.get(name="Rogue"):
                 links.append((reverse('rogue_disarmed'), "Report that you were disarmed"))
-
+            if self.role == Role.objects.get(name="Vigilante"):
+                links.append((reverse('vig_disarmed'), "Report that you tried unsuccessfully to kill someone"))
         if self.can_investigate():
             links.append((reverse('forms:investigation'), "Make an investigation"))
         if self.role == Role.objects.get(name="Desperado"):
