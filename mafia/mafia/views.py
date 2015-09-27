@@ -22,12 +22,14 @@ from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
 from django.views.generic import FormView
 from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, CynicListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
+    ConspiracyListForm, CynicListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, \
+    CCTVDeathForm, \
     WatchListForm
 from django.shortcuts import render
 import requests
-from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE, LYNCH_WORD, LYNCH_VERB
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, MafiaPower, Notification, \
+from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE, LYNCH_WORD, LYNCH_VERB, HIDE_WHY
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, MafiaPower, \
+    Notification, \
     SuperheroDay, GayKnightPair, ElectedRole, CluePile
 from django.core.urlresolvers import reverse
 
@@ -135,13 +137,14 @@ def rules(request):
         game = False
 
     markdown_rules = requests.get('https://raw.githubusercontent.com/jake223/Mafia-rules/master/README.md').content
-    markdown_rules = ''.join(i for i in markdown_rules if ord(i)<128)
+    markdown_rules = ''.join(i for i in markdown_rules if ord(i) < 128)
     html = markdown(markdown_rules)
     params['rules_content'] = html
     if game:
         return render(request, 'rules.html', params)
     else:
         return render(request, 'rules2.html', params)
+
 
 @notifier
 @login_required
@@ -284,7 +287,8 @@ def recent_deaths(request):
             if player.is_evil() or player.role.name == "Rogue":
                 destructibles = Death.objects.filter(murderee__game__active=True, total_clues__gt=-1).exclude(
                     clue_destroyers=player)
-            for death in Death.objects.filter(Q(murderer__game__active=True)|Q(murderee__mafiapowers_targeted_set__power=MafiaPower.HIRE_A_HITMAN)):
+            for death in Death.objects.filter(Q(murderer__game__active=True) | Q(
+                    murderee__mafiapowers_targeted_set__power=MafiaPower.HIRE_A_HITMAN)):
                 if player.can_collect_clues(death.murderee):
                     gatherables.append(death)
     else:
@@ -328,7 +332,8 @@ def investigation_form(request):
                     pile.use()
                 player.log(message="%s investigates %s for the death of %s (answer: %s)" %
                                    (
-                                   player, guess, death.murderee, "Correct" if investigation.is_correct() else "Wrong"))
+                                       player, guess, death.murderee,
+                                       "Correct" if investigation.is_correct() else "Wrong"))
                 if investigation.is_correct():
                     messages.add_message(request, messages.SUCCESS, "Correct. <b>%s</b> killed <b>%s</b>."
                                          % (guess.user.username, death.murderee.user.username))
@@ -438,7 +443,8 @@ def lynch_vote(request):
         else:
             form = LynchVoteForm()
 
-            return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Vote to %s Someone' % (LYNCH_VERB[0].upper() + LYNCH_VERB[1:]),
+            return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Vote to %s Someone' % (
+                LYNCH_VERB[0].upper() + LYNCH_VERB[1:]),
                                                  'url': reverse('forms:vote')})
     else:
         messages.add_message(request, messages.ERROR, "Dead people don't vote. :(")
@@ -757,7 +763,10 @@ def evict_player(request, pid):
         Death.objects.create(murderee=player, day=player.game.current_day, when=now(),
                              where="Evicted (day %d)" % player.game.current_day)
         messages.success(request, "%s removed from game" % player.username)
-        game.log("%s evicted from game" % player)
+        if HIDE_WHY:
+            game.log(message="%s evicted from game" % player)
+        else:
+            game.log(anonymous_message="%s evicted from game" % player)
     return HttpResponseRedirect(reverse('player_intros'))
 
 
@@ -799,21 +808,23 @@ def conspiracy_list_form(request):
                 messages.error(request, "Your backups cannot be people on your list")
                 player = Player.objects.get(user=request.user, game__active=True)
                 return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
-                                                 'url': reverse('forms:cynic_list')})
+                                                     'url': reverse('forms:cynic_list')})
             conspiracy.backup1 = form.cleaned_data['backup1']
             if form.cleaned_data['backup2']:
                 if form.cleaned_data['backup2'].username in consp_list:
                     messages.error(request, "Your backups cannot be people on your list")
                     player = Player.objects.get(user=request.user, game__active=True)
-                    return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
-                                                 'url': reverse('forms:cynic_list')})
+                    return render(request, "form.html",
+                                  {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                   'url': reverse('forms:cynic_list')})
                 conspiracy.backup2 = form.cleaned_data['backup2']
                 if form.cleaned_data['backup3']:
                     if form.cleaned_data['backup3'].username in consp_list:
                         messages.error(request, "Your backups cannot be people on your list")
                         player = Player.objects.get(user=request.user, game__active=True)
-                        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
-                                                     'url': reverse('forms:cynic_list')})
+                        return render(request, "form.html",
+                                      {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                       'url': reverse('forms:cynic_list')})
                     conspiracy.backup3 = form.cleaned_data['backup3']
         conspiracy.save()
         player.log("%s has updated their conspiracy list for day %d to: [%s]" % (player, player.game.current_day + 1,
@@ -854,31 +865,34 @@ def cynic_list_form(request):
                 messages.error(request, "Your backups cannot be people on your list")
                 player = Player.objects.get(user=request.user, game__active=True)
                 return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
-                                                 'url': reverse('forms:cynic_list')})
+                                                     'url': reverse('forms:cynic_list')})
             cynicism.backup1 = form.cleaned_data['backup1']
             if form.cleaned_data['backup2']:
                 if form.cleaned_data['backup2'].username in cyn_list:
                     messages.error(request, "Your backups cannot be people on your list")
                     player = Player.objects.get(user=request.user, game__active=True)
-                    return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
-                                                 'url': reverse('forms:cynic_list')})
+                    return render(request, "form.html",
+                                  {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                   'url': reverse('forms:cynic_list')})
                 cynicism.backup2 = form.cleaned_data['backup2']
                 if form.cleaned_data['backup3']:
                     if form.cleaned_data['backup3'].username in cyn_list:
                         messages.error(request, "Your backups cannot be people on your list")
                         player = Player.objects.get(user=request.user, game__active=True)
-                        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
-                                                 'url': reverse('forms:cynic_list')})
+                        return render(request, "form.html",
+                                      {'form': form, 'player': player, "title": "Set up Your Cynic List",
+                                       'url': reverse('forms:cynic_list')})
                     cynicism.backup3 = form.cleaned_data['backup3']
         cynicism.save()
         player.log("%s has updated their cynic list for day %d to: [%s]" % (player, player.game.current_day + 1,
-                                                                                 ", ".join(cyn_list)))
+                                                                            ", ".join(cyn_list)))
         messages.success(request, "Cynic list updated successfully")
         return HttpResponseRedirect(reverse('your_role'))
     else:
         player = Player.objects.get(user=request.user, game__active=True)
         return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
                                              'url': reverse('forms:cynic_list')})
+
 
 @notifier
 def logs(request):
@@ -1182,7 +1196,8 @@ def modify_watch_list(request, day=None):
         form = WatchListForm(request.POST)
         if form.is_valid():
             tomorrow = form.cleaned_data['day'] > player.game.current_day  # could be after tomorrow, this is ok
-            today = form.cleaned_data['day'] == player.game.current_day and (now() - player.game.today_start).seconds < 3600
+            today = form.cleaned_data['day'] == player.game.current_day and (
+                                                                                now() - player.game.today_start).seconds < 3600
 
             # no idea why this is necessary, but I get strange bugs otherwise.
             # TODO: Convert this to cleaned_data
