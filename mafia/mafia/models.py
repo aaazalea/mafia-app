@@ -860,7 +860,8 @@ class Death(models.Model):
                         # Discard items
                         item.owner = None
                         item.save()
-                        self.murderee.log(message="%s, which %s was holding, was destroyed by KABOOM!" %
+                        if KABOOM_NOISE:
+                            self.murderee.log(message="%s, which %s was holding, was destroyed by KABOOM!" %
                                                   (item.get_name(), self.murderee))
                 else:
                     if not self.murderer.is_mafia_don():

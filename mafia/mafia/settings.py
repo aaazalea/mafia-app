@@ -158,4 +158,6 @@ ELECTRONIC_IC_REVEAL = False
 # Are items publicly or privately redistributed?
 ITEM_REDISTRIBUTE_ANNOUNCE = False
 
+# Does a player who holds a speaker hear when someone dies via the corresponding microphone with a kaboom?
+KABOOM_NOISE = False
 

@@ -14,11 +14,11 @@ class RoleAdmin(admin.ModelAdmin):
 admin.site.register(Role, RoleAdmin)
 
 
-# class DeathAdmin(admin.ModelAdmin):
-#     list_display = ('murderee', 'murderer', 'when', 'where')
-#
-#
-# admin.site.register(Death, DeathAdmin)
+class DeathAdmin(admin.ModelAdmin):
+    list_display = ('murderee', 'murderer', 'when', 'where')
+
+
+admin.site.register(Death, DeathAdmin)
 #from django.utils import strip_tags
 
 class PlayerInline(admin.TabularInline):
