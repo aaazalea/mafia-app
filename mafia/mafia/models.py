@@ -239,7 +239,7 @@ class Player(models.Model):
             else:
                 return "Secret identity"
         elif self.role == Role.objects.get(name__iexact="Stalker"):
-            return "Stalk target is %s" % self.stalk_target
+            return "Stalk target is %s" % self.today_stalk_target
         elif self.role == Role.objects.get(name__iexact="Priest"):
             list1 = ", ".join(
                 p.username for p in self.saintlist_set.get_or_create(day=self.game.current_day)[0].sainted.all())
@@ -271,6 +271,19 @@ class Player(models.Model):
             return a.all()[0].player2
 
     gn_partner = property(get_gn_partner)
+    
+    def get_today_stalk_target(self):
+        #TODO fix this
+        return None
+        
+    def get_tomorrow_stalk_target(self):
+        #TODO fix this
+        return None
+        
+    today_stalk_target = property(get_today_stalk_target)
+    tomorrow_stalk_target = property(get_tomorrow_stalk_target)
+    
+    
 
     def cant_rogue_kill(self):
         """
@@ -300,6 +313,17 @@ class Player(models.Model):
                 return "Your Gay Knight partner is <b>" + self.gn_partner.user.username + "</b>."
             else:
                 return "Your Gay Knight partner has not been assigned yet."
+        if self.role == Role.objects.get(name__iexact='Stalker'):
+            stalking = ""
+            if self.today_stalk_target:
+                stalking += "Today you are stalking <b>" + self.today_stalk_target.user.username + "</b>. "
+            else:
+                stalking += "You are not stalking anyone today. "
+            if self.tomorrow_stalk_target:
+                stalking += "Tomorrow you will stalk <b>" + self.tomorrow_stalk_target.user.username + "</b>."
+            else:
+                stalking += "You have not chosen anyone to stalk tomorrow."
+            return stalking
         elif self.role == Role.objects.get(name__iexact="rogue"):
             if self.can_make_kills():
                 return "You are currently permitted to make kills."
@@ -338,6 +362,46 @@ class Player(models.Model):
             return '<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
                    '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
                        tablify(today), tablify(tomorrow))
+        elif self.role == Role.objects.get(name__iexact='Priest'):
+            today_sinner = self.sinnerlist_set.get_or_create(day=self.game.current_day)[0]
+            today_saint = self.saintlist_set.get_or_create(day=self.game.current_day)[0]
+            tomorrow_sinner = self.sinnerlist_set.filter(day=self.game.current_day + 1)
+            tomorrow_saint = self.saintlist_set.filter(day=self.game.current_day + 1)
+            if tomorrow_sinner.exists():
+                tomorrow_sinner = tomorrow_sinner[0]
+            else:
+                # make a copy of today
+                tomorrow_sinner = SinnerList.objects.get(id=today.id)
+                tomorrow_sinner.id = None
+                tomorrow_sinner.day += 1
+                tomorrow_sinner.save()
+                for suspect in today_sinner.sinnered.all():
+                    tomorrow_sinner.sinnered.add(suspect)
+                tomorrow_sinner.save()
+            if tomorrow_saint.exists():
+                tomorrow_saint = tomorrow_saint[0]
+            else:
+                # make a copy of today
+                tomorrow_saint = SaintList.objects.get(id=today.id)
+                tomorrow_saint.id = None
+                tomorrow_saint.day += 1
+                tomorrow_saint.save()
+                for suspect in today_saint.sainted.all():
+                    tomorrow_saint.sainted.add(suspect)
+                tomorrow_saint.save()
+
+            saint_tablify = lambda consp: ''.join(
+                '<td>%s</td>' % d.username for d in
+                consp.sainted.all()) if consp.sainted.exists() else "<td>(empty)</td>"
+            sinner_tablify = lambda consp: ''.join(
+                '<td>%s</td>' % d.username for d in
+                consp.sinnered.all()) if consp.sinnered.exists() else "<td>(empty)</td>"
+            return ('<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
+                   '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
+                       sinner_tablify(today_sinner), sinner_tablify(tomorrow_sinner)),
+                    '<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
+                   '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
+                       saint_tablify(today_saint), saint_tablify(tomorrow_saint)))
         elif self.role == Role.objects.get(name__iexact='Cynic'):
             today = self.cyniclist_set.get_or_create(day=self.game.current_day)[0]
             tomorrow = self.cyniclist_set.filter(day=self.game.current_day + 1)
