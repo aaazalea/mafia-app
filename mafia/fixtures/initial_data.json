@@ -145,7 +145,7 @@
     {
         "fields": {
             "name": "Police Officer",
-            "description": "Each day, the police officer may designate up to three players to "watch" the next day. The police officer gets one investigation per day (in addition to whatever investigative role powers they may have). They can use it on any person that died while on their watch list, even if they have previously investigated that death.\r\nA police officer must visit a persons death scene and message the Mods that they did so before they can make any investigations on that person's death.\r\n"
+            "description": "Each day, the police officer may designate up to three players to 'watch' the next day. The police officer gets one investigation per day (in addition to whatever investigative role powers they may have). They can use it on any person that died while on their watch list, even if they have previously investigated that death.\r\nA police officer must visit a persons death scene and message the Mods that they did so before they can make any investigations on that person's death.\r\n"
         },
         "model": "mafia.electedrole",
         "pk": 2
