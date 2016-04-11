@@ -91,6 +91,33 @@
     },
     {
         "fields": {
+            "evil_by_default": false,
+            "name": "Priest",
+            "description":"Each day, the priest can designate up to 20% of the number of players (rounding up) as sinners, and up to 20% as saints. Mods will assume the list is unchanged unless told otherwise, and will remove the last player on the list at the end of day if the previous list has become larger than 20% of game. No player can be on both their sinner list and their saint list.\nIf a sinner on their list kills a saint on their list, the priest will be notified that the killer was a sinner.\nIf a saint kills a sinner, because of their poor judgment the priest will lose their ability to discern between sinners and saints. They lose their powers for the rest of the game and will be notified. Meanwhile, any investigations on this saint for killing this sinner will return a negative result."
+        },
+        "model": "mafia.role",
+        "pk": 12
+    },
+    {
+        "fields": {
+            "evil_by_default": false,
+            "name": "Group Investigator",
+            "description": "The group investigator acts the same as a regular investigator, but their investigations ask about whether a set of n people killed X. If any of those n people would have returned positive for killing X in a regular investigation, the group investigator is told 'Yes, someone in that set killed X.' Otherwise they are told No.\nThe group investigator cannot make investigations two days in a row. If their most recent investigation was m days ago, they can ask about any set of size at most 1+2+...+m. For example, if a group investigator made an investigation on day 3, then they cannot make an investigation on day 4. They can ask about a set of at most 3 people on day 5, or can ask about a set of at most 6 people on day 6, or 10 people on day 7, or so on until they make an investigation, at which point their set size resets to 0. The group investigator is considered to have made an investigation on day 0, so they cannot make investigations on day 1, and have a maximum set size of 3 on day 2."
+        },
+        "model": "mafia.role",
+        "pk": 13
+    },
+    {
+        "fields": {
+            "evil_by_default": false,
+            "name": "Stalker",
+            "stalker":"The stalker chooses a person to stalk each day. If person X is being stalked by stalker Y, they are informed that they are being stalked, but not told who is stalking them. If person X makes any successful kills while being stalked, their stalker is notified that they made the kill. If stalker Y has ever stalked person X before, they may not do so again, though stalker Z may stalk person X. No manipulation abilities will prevent the stalker from learning if their target makes a kill. Mafia have an ability that allows them to simulate the stalker role."
+        },
+        "model": "mafia.role",
+        "pk": 14
+    },
+    {
+        "fields": {
             "username": "admin",
             "first_name": "",
             "last_name": "",
