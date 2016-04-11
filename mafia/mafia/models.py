@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, PRIEST_LIST_SIZE, PRIEST_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
-    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT
+    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, ONE_INVESTIGATION_ALWAYS
 from django.utils.timezone import now
 
 NO_LYNCH = "No lynch"
@@ -246,7 +246,7 @@ class Player(models.Model):
             list2 = ", ".join(
                 p.username for p in self.sinnerlist_set.get_or_create(day=self.game.current_day)[0].sinnered.all())
             if list1 and list2:
-                return "Saint list: [%s] \tSinner list: [%s]" % list1 % list2
+                return "Saint list: [%s] \tSinner list: [%s]" % (list1, list2)
             else:
                 return "Priest lists not chosen"
         else:
@@ -532,12 +532,18 @@ class Player(models.Model):
             if not Investigation.objects.filter(investigator=self,
                                                 day__gte=self.game.current_day - 1,
                                                 investigation_type=Investigation.MAYORAL).exists():
-                return True
+                return (not death) or self.has_clues_to_investigate(death.murderee)
         if self.role == Role.objects.get(name__iexact='investigator') and (
                         kind is None or kind == Investigation.INVESTIGATOR):
             if not Investigation.objects.filter(investigator=self,
                                                 day=self.game.current_day,
                                                 investigation_type=Investigation.INVESTIGATOR).exists():
+                return (not death) or self.has_clues_to_investigate(death.murderee)
+        if self.role == Role.objects.get(name__iexact='Group Investigator') and (
+                        kind is None or kind == Investigation.GROUP_INVESTIGATOR):
+            if not Investigation.objects.filter(investigator=self,
+                                                day=self.game.current_day,
+                                                investigation_type=Investigation.GROUP_INVESTIGATOR).exists():
                 return (not death) or self.has_clues_to_investigate(death.murderee)
         if self.role == Role.objects.get(name__iexact='superhero') and (
                         kind is None or kind == Investigation.SUPERHERO):
@@ -579,6 +585,8 @@ class Player(models.Model):
         super(Player, self).save(*args, **kwargs)
 
     def can_destroy_clue(self, death=None):
+        if ONE_INVESTIGATION_PER:
+            return false
         return (self.is_evil() or self.role == Role.objects.get(name__iexact="Rogue")) and (
             not death or (not self in death.clue_destroyers.all()) and death.total_clues > 0)
 
@@ -618,6 +626,8 @@ class Player(models.Model):
         votes = LynchVote.objects.filter(voter=self, day=day).order_by('-time_made')
         if votes:
             return votes[0]
+        elif AUTO_SELF_VOTE:
+            return self #todo fix this to be a LynchVote object
         else:
             return None
 
@@ -657,7 +667,9 @@ class Player(models.Model):
             poison = poisons[0]
             if poison.day_used == self.game.current_day:
                 self.notify("You've been poisoned! You die at day end on day %d" % (poison.day_used + 2))
-
+        if self.role == Role.objects.get(name="Stalker"):
+            self.today_stalk_target = self.tomorrow_stalk_target
+            self.tomorrow_stalk_target = None
         if self.role == Role.objects.get(name="Conspiracy Theorist"):
             try:
                 consp_list = self.conspiracylist_set.get(day=self.game.current_day + 1)
@@ -755,6 +767,101 @@ class Player(models.Model):
                                                                            count_dead:count_dead + 3]
 
             cyn_list.save()
+            
+        if self.role == Role.objects.get(name="Priest"):
+            try:
+                st_list = self.saintlist_set.get(day=self.game.current_day + 1)
+            except SaintList.DoesNotExist:
+                today_saint = self.saintlist_set.get_or_create(day=self.game.current_day)[0]
+                tomorrow_saint = SaintList.objects.get(id=today.id)
+                tomorrow_saint.id = None
+                tomorrow_saint.day += 1
+                tomorrow_saint.save()
+                for victim in today_saint.sainted.all():
+                    tomorrow_saint.sainted.add(victim)
+                tomorrow_saint.save()
+
+                st_list = tomorrow_saint
+
+            count_dead = 0
+            if PRIEST_LIST_SIZE_IS_PERCENT:
+                list_size = math.ceil(self.game.number_of_living_players * 0.01 * PRIEST_LIST_SIZE)
+            else:
+                list_size = PRIEST_LIST_SIZE
+
+            if list_size < len(st_list.sainted.all()):
+                # TODO When too many people die in a day you may need to drop more than 1 person from your list
+                st_list.sainted.remove(st_list.drop)
+                # Gives the set of possible backups who are still alive
+                backups = [person for person in
+                           (st_list.drop, st_list.backup1, st_list.backup2, st_list.backup3) if
+                           (person and person.is_alive())]
+                st_list.drop = None
+            else:
+                backups = [person for person in (st_list.backup1, st_list.backup2, st_list.backup3) if
+                           (person and person.is_alive())]
+
+            saints = list(st_list.sainted.all())
+
+            for saint in saints:
+                if not saint.is_alive():
+                    st_list.sainted.remove(saint)
+                    if count_dead < len(backups):
+                        st_list.sainted.add(backups[count_dead])
+                        count_dead += 1
+
+            if not (st_list.drop and st_list.drop.is_alive()):
+                st_list.drop = st_list.sainted.first()
+            (st_list.backup1, st_list.backup2, st_list.backup3) = (backups + [None, None, None])[
+                                                                           count_dead:count_dead + 3]
+            st_list.save()
+            
+            try:
+                sin_list = self.sinnerlist_set.get(day=self.game.current_day + 1)
+            except SinnerList.DoesNotExist:
+                today_sinner = self.sinnerlist_set.get_or_create(day=self.game.current_day)[0]
+                tomorrow_sinner = SinnerList.objects.get(id=today.id)
+                tomorrow_sinner.id = None
+                tomorrow_sinner.day += 1
+                tomorrow_sinner.save()
+                for victim in today_sinner.sinnered.all():
+                    tomorrow_sinner.sinnered.add(victim)
+                tomorrow_sinner.save()
+
+                sin_list = tomorrow_sinner
+
+            count_dead = 0
+            if PRIEST_LIST_SIZE_IS_PERCENT:
+                list_size = math.ceil(self.game.number_of_living_players * 0.01 * PRIEST_LIST_SIZE)
+            else:
+                list_size = PRIEST_LIST_SIZE
+
+            if list_size < len(sin_list.sinnered.all()):
+                # TODO When too many people die in a day you may need to drop more than 1 person from your list
+                sin_list.sinnered.remove(sin_list.drop)
+                # Gives the set of possible backups who are still alive
+                backups = [person for person in
+                           (sin_list.drop, sin_list.backup1, sin_list.backup2, sin_list.backup3) if
+                           (person and person.is_alive())]
+                sin_list.drop = None
+            else:
+                backups = [person for person in (sin_list.backup1, sin_list.backup2, sin_list.backup3) if
+                           (person and person.is_alive())]
+
+            sinners = list(sin_list.sinnered.all())
+
+            for sinner in sinners:
+                if not sinner.is_alive():
+                    sin_list.sinnered.remove(sinner)
+                    if count_dead < len(backups):
+                        sin_list.sinnered.add(backups[count_dead])
+                        count_dead += 1
+
+            if not (sin_list.drop and sin_list.drop.is_alive()):
+                sin_list.drop = sin_list.sainted.first()
+            (sin_list.backup1, sin_list.backup2, sin_list.backup3) = (backups + [None, None, None])[
+                                                                           count_dead:count_dead + 3]
+            sin_list.save()
 
         self.save()
 
