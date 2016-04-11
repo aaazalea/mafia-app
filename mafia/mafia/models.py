@@ -7,7 +7,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
-    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
+    MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, PRIEST_LIST_SIZE, PRIEST_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
     TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT
 from django.utils.timezone import now
 
@@ -238,8 +238,19 @@ class Player(models.Model):
                 return "Superhero identity (paranoia: %s)" % superhero_day.paranoia
             else:
                 return "Secret identity"
+        elif self.role == Role.objects.get(name__iexact="Stalker"):
+            return "Stalk target is %s" % self.stalk_target
+        elif self.role == Role.objects.get(name__iexact="Priest"):
+            list1 = ", ".join(
+                p.username for p in self.saintlist_set.get_or_create(day=self.game.current_day)[0].sainted.all())
+            list2 = ", ".join(
+                p.username for p in self.sinnerlist_set.get_or_create(day=self.game.current_day)[0].sinnered.all())
+            if list1 and list2:
+                return "Saint list: [%s] \tSinner list: [%s]" % list1 % list2
+            else:
+                return "Priest lists not chosen"
         else:
-            # IC, Investigator
+            # IC, Investigator, group investigator
             return ""
             # TODO mafia don
 
