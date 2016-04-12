@@ -874,6 +874,111 @@ def cynic_list_form(request):
         player = Player.objects.get(user=request.user, game__active=True)
         return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Cynic List",
                                              'url': reverse('forms:cynic_list')})
+                                             
+                                             
+def saint_list_form(request):
+    form = SaintListForm(request.POST or None)
+    if form.is_valid():
+        player = Player.objects.get(game__active=True, user=request.user)
+        if player.role != Role.objects.get(name__iexact="Priest"):
+            messages.warning(request, "You're not a Priest!")
+            return HttpResponseRedirect("/")
+        saintlist = SaintList.objects.get_or_create(owner=player, day=player.game.current_day + 1)[0]
+        saintlist.sainted.clear()
+        data = form.cleaned_data['new_saint_list']
+        st_list = []
+        for saint in data:
+            saintlist.sainted.add(saint)
+            st_list.append(saint.username)
+
+        saintlist.drop = form.cleaned_data['person_to_remove']
+        if saintlist.drop.username not in st_list:
+            messages.error(request, "Your person-to-drop must be on your list.")
+            player = Player.objects.get(user=request.user, game__active=True)
+            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Saint List",
+                                                 'url': reverse('forms:saint_list')})
+        if form.cleaned_data['backup1']:
+            if form.cleaned_data['backup1'].username in st_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Saint List",
+                                                 'url': reverse('forms:saint_list')})
+            saintlist.backup1 = form.cleaned_data['backup1']
+        if form.cleaned_data['backup2']:
+            if form.cleaned_data['backup2'].username in st_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Saint List",
+                                             'url': reverse('forms:saint_list')})
+            saintlist.backup2 = form.cleaned_data['backup2']
+        if form.cleaned_data['backup3']:
+            if form.cleaned_data['backup3'].username in st_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Saint List",
+                                         'url': reverse('forms:saint_list')})
+            saintlist.backup3 = form.cleaned_data['backup3']
+        saintlist.save()
+        player.log("%s has updated their Saint list for day %d to: [%s]" % (player, player.game.current_day + 1,
+                                                                                 ", ".join(st_list)))
+        messages.success(request, "Saint list updated successfully")
+        return HttpResponseRedirect(reverse('your_role'))
+    else:
+        player = Player.objects.get(user=request.user, game__active=True)
+        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Saint List",
+                                             'url': reverse('forms:saint_list')})
+                                             
+def sinner_list_form(request):
+    form = SinnerListForm(request.POST or None)
+    if form.is_valid():
+        player = Player.objects.get(game__active=True, user=request.user)
+        if player.role != Role.objects.get(name__iexact="Priest"):
+            messages.warning(request, "You're not a Priest!")
+            return HttpResponseRedirect("/")
+        sinnerlist = SinnerList.objects.get_or_create(owner=player, day=player.game.current_day + 1)[0]
+        sinnerlist.sinnered.clear()
+        data = form.cleaned_data['new_sinner_list']
+        sin_list = []
+        for sinner in data:
+            sinnerlist.sinnered.add(sinner)
+            sin_list.append(sinner.username)
+
+        sinnerlist.drop = form.cleaned_data['person_to_remove']
+        if sinnerlist.drop.username not in sin_list:
+            messages.error(request, "Your person-to-drop must be on your list.")
+            player = Player.objects.get(user=request.user, game__active=True)
+            return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Sinner List",
+                                                 'url': reverse('forms:sinner_list')})
+        if form.cleaned_data['backup1']:
+            if form.cleaned_data['backup1'].username in sin_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Sinner List",
+                                                 'url': reverse('forms:sinner_list')})
+            sinnerlist.backup1 = form.cleaned_data['backup1']
+        if form.cleaned_data['backup2']:
+            if form.cleaned_data['backup2'].username in sin_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Sinner List",
+                                             'url': reverse('forms:sinner_list')})
+            sinnerlist.backup2 = form.cleaned_data['backup2']
+        if form.cleaned_data['backup3']:
+            if form.cleaned_data['backup3'].username in sin_list:
+                messages.error(request, "Your backups cannot be people on your list")
+                player = Player.objects.get(user=request.user, game__active=True)
+                return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Sinner List",
+                                         'url': reverse('forms:sinner_list')})
+            sinnerlist.backup3 = form.cleaned_data['backup3']
+        sinnerlist.save()
+        player.log("%s has updated their Sinner list for day %d to: [%s]" % (player, player.game.current_day + 1,
+                                                                                 ", ".join(sin_list)))
+        messages.success(request, "Sinner list updated successfully")
+        return HttpResponseRedirect(reverse('your_role'))
+    else:
+        player = Player.objects.get(user=request.user, game__active=True)
+        return render(request, "form.html", {'form': form, 'player': player, "title": "Set up Your Sinner List",
+                                             'url': reverse('forms:sinner_list')})
 
 @notifier
 def logs(request):
