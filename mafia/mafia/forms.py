@@ -53,6 +53,21 @@ class InvestigationForm(forms.Form):
                                            label="What kind of investigation are you using? [choose one you're allowed to]"
                                            )
 
+class GroupInvestigationForm(forms.Form):
+    death = DeathModelChoiceField(
+        queryset=Death.objects.filter(Q(murderer__game__active=True) | (
+            Q(murderee__mafiapowers_targeted_set__power=MafiaPower.HIRE_A_HITMAN) & Q(
+                murderee__game__active=True))).distinct(),
+        label="Which death would you like to investigate?",
+    )
+    guesses = ModelMultipleChoiceField(
+        queryset=Player.objects.filter(game__active=True),
+        label="Whom would you like to investigate?"
+    )
+    def clean(self):
+        investigation_size = len(self.cleaned_data['guesses'])
+            if conspiracy_size > max_investigation_size:
+                raise ValidationError("You may investigate a set of at most %d% people.." % max_investigation_size)
 
 class LynchVoteForm(forms.Form):
     vote = PlayerModelChoiceField(
@@ -89,7 +104,7 @@ class MafiaPowerForm(forms.Form):
             if need:
                 self.fields['extra_field'] = need
             self.fields['power_id'] = forms.IntegerField(widget=forms.HiddenInput(), initial=power.id)
-            if power.power in [MafiaPower.SET_A_TRAP, MafiaPower.SLAUGHTER_THE_WEAK, MafiaPower.CONSCRIPTION]:
+            if power.power in [MafiaPower.SET_A_TRAP, MafiaPower.SLAUGHTER_THE_WEAK, MafiaPower.CONSCRIPTION, MafiaPower.STALK]:
                 self.fields['target'] = forms.ModelChoiceField(
                     queryset=Player.objects.filter(death=None, game__active=True))
 
