@@ -218,6 +218,45 @@ def superhero_form(request):
 
 @notifier
 @login_required
+@user_passes_test(
+    lambda user: user.is_authenticated() and Player.objects.filter(user=user, role__name__iexact="Stalker",
+                                                                   game__active=True).exists(),
+    login_url='/')
+def stalk_target_form(request):
+    form = StalkTargetForm(request.POST or None)
+    if form.is_valid():
+        player = Player.objects.get(game__active=True, user=request.user)
+        if player.role != Role.objects.get(name__iexact="Stalker"):
+            messages.warning(request, "You're not a stalker!")
+            return HttpResponseRedirect("/")
+        target_list_object = StalkTargetList.objects.get_or_create(owner=player)[0]
+        target_list = target_list_object.targets
+        new_target = form.cleaned_data['target']
+        # check they're not already in list:
+        if new_target in target_list:
+            messages.error(request,
+                        "You have already stalked this target on a previous day, or are already stalking them tomorrow.")
+            return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Stalk Target Form',
+                                             'url': reverse('forms:stalk_target')})
+        # if we've already updated today, day=today so we just overwrite first entry; otherwise we put on front of list
+        today = player.game.current_day
+        if target_list_object.day = today:
+            target_list[0] = new_target
+            player.log("%s has changed stalk target for day %d to %s" % (player, today + 1, new_target))
+        else:
+            target_list.insert(0, new_target)
+            player.log("%s has set stalk target for day %d to %s" % (player, today + 1, new_target))
+        target_list_object.day = today
+        target_list_object.targets = target_list
+        target_list_object.save()
+        messages.success(request, "Set stalking settings for day %d successfully" % (today + 1))
+        return HttpResponseRedirect('/')
+    else:
+        return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Stalk Target Form',
+                                             'url': reverse('forms:stalk_target')})
+
+@notifier
+@login_required
 def kill_report(request):
     game = Game.objects.get(active=True)
     if game.current_day == 0:
