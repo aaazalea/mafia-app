@@ -273,12 +273,16 @@ class Player(models.Model):
     gn_partner = property(get_gn_partner)
     
     def get_today_stalk_target(self):
-        #TODO fix this
-        return None
+        l = StalkTargetList.objects.filter(stalker=self)
+        if not l.exists():
+            return None
+        return l.all()[0].targets[1]
         
     def get_tomorrow_stalk_target(self):
-        #TODO fix this
-        return None
+        l = StalkTargetList.objects.filter(stalker=self)
+        if not l.exists():
+            return None
+        return l.all()[0].targets[0]
         
     today_stalk_target = property(get_today_stalk_target)
     tomorrow_stalk_target = property(get_tomorrow_stalk_target)
@@ -1261,6 +1265,7 @@ class Investigation(models.Model):
                                                             Investigation.GROUP_INVESTIGATOR, Investigation.MAYORAL]
 
 
+
 class LynchVote(models.Model):
     voter = models.ForeignKey(Player, related_name="lynch_votes_made")
     lynchee = models.ForeignKey(Player, related_name="lynch_votes_received", null=True)
@@ -1543,6 +1548,11 @@ class MafiaPower(models.Model):
         elif self.power == MafiaPower.ELECT_A_DON:
             return "The mafia have elected %s as their don." % self.target
 
+
+class StalkTargetList(models.Model):
+    stalker  = models.ForeignKey(Player)
+    targets = models.ManyToManyField(Player, related_name='stalk_targets')
+    day = models.IntegerField()
 
 class ConspiracyList(models.Model):
     owner = models.ForeignKey(Player)
