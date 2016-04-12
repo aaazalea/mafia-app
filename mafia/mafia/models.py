@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q
 from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, PRIEST_LIST_SIZE, PRIEST_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
-    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, ONE_INVESTIGATION_ALWAYS
+    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, ONE_INVESTIGATION_PER, AUTO_SELF_LYNCH
 from django.utils.timezone import now
 
 NO_LYNCH = "No lynch"
@@ -888,6 +888,11 @@ class Player(models.Model):
             links.append((reverse('forms:conspiracy_list'), 'Update your conspiracy list'))
         if self.role == Role.objects.get(name__iexact="Cynic"):
             links.append((reverse('forms:cynic_list'), 'Update your cynic list'))
+        if self.role == Role.objects.get(name__iexact="Stalker"):
+            links.append((reverse('forms:stalk_target'), 'Update your stalking target'))
+        if self.role == Role.objects.get(name__iexact="Priest"):
+            links.append((reverse('forms:saint_list'), 'Update your saint list')) 
+            links.append((reverse('forms:sinner_list'), 'Update your sinner list')) 
         if self.is_evil():
             links.append((reverse('mafia_powers'), 'Mafia Powers'))
             if MafiaPower.objects.filter(power=MafiaPower.HIRE_A_HITMAN, state=MafiaPower.SET,
@@ -1088,6 +1093,8 @@ class Death(models.Model):
                 if CLUES_IN_USE:
                     if MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
                         self.total_clues = 0
+                    elif ONE_INVESTIGATION_PER:
+                        self.total_clues = 1
                     else:
                         self.total_clues = 2 #1 + sum(
                             #p.is_evil() or p.role == Role.objects.get(name__iexact="Rogue") for p in
@@ -1204,12 +1211,14 @@ class Investigation(models.Model):
 
     INVESTIGATOR = 'IN'
     GAY_KNIGHT = 'GN'
+    GROUP_INVESTIGATOR = 'GI'
     SUPERHERO = 'SH'
     MAYORAL = 'MY'
     POLICE_OFFICER = 'PO'
     DESPERADO = "DE"
     INVESTIGATION_KINDS = (
         (GAY_KNIGHT, "Gay Knight"),
+        (GROUP_INVESTIGATOR, "Group Investigator"),
         (INVESTIGATOR, "Investigator"),
         (SUPERHERO, "Superhero"),
         (MAYORAL, "Mayoral"),
@@ -1246,7 +1255,8 @@ class Investigation(models.Model):
 
     def uses_clue(self):
         return CLUES_IN_USE and self.investigation_type in [Investigation.INVESTIGATOR, Investigation.SUPERHERO,
-                                                            Investigation.DESPERADO, Investigation.POLICE_OFFICER]
+                                                            Investigation.DESPERADO, Investigation.POLICE_OFFICER,
+                                                            Investigation.GROUP_INVESTIGATOR, Investigation.MAYORAL]
 
 
 class LynchVote(models.Model):
@@ -1381,6 +1391,7 @@ class MafiaPower(models.Model):
     HIRE_A_HITMAN = 9
     CONSCRIPTION = 10
     ELECT_A_DON = 11
+    STALK = 12
     MAFIA_POWER_TYPE = [
         (KABOOM, "KABOOM!"),
         (SCHEME, "Scheme"),
@@ -1392,7 +1403,8 @@ class MafiaPower(models.Model):
         (MANIPULATE_THE_PRESS, "Manipulate the Press"),
         (HIRE_A_HITMAN, "Hire a Hitman"),
         (CONSCRIPTION, "Conscription"),
-        (ELECT_A_DON, "Elect a Don")
+        (ELECT_A_DON, "Elect a Don"),
+        (STALK, "Stalk")
     ]
 
     target = models.ForeignKey(Player, null=True, related_name="mafiapowers_targeted_set")
@@ -1449,6 +1461,9 @@ class MafiaPower(models.Model):
             return forms.ChoiceField(choices=choices, label="What role would you like to plant evidence for?")
         elif self.power == MafiaPower.SET_A_TRAP:
             return forms.ModelChoiceField(queryset=Role.objects.all(), label="What is your guess for a role?")
+        elif self.power == MafiaPower.STALK:
+            return forms.ModelChoiceField(queryset=Player.objects.filter(game__active=True),
+                                          label="Who do you want to stalk tomorrow?")
         else:
             return False
 
@@ -1475,6 +1490,8 @@ class MafiaPower(models.Model):
         elif self.power == MafiaPower.PLANT_EVIDENCE:
             return "Evidence planted for %s%s" % (
                 ("Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
+        elif self.power == MafiaPower.STALK:
+            return "Stalking %s tomorrow" % self.target
         elif self.power == MafiaPower.HIRE_A_HITMAN:
             if self.game.current_day == self.day_used:
                 return "%s hired as a hitman for tomorrow" % self.comment
@@ -1508,6 +1525,8 @@ class MafiaPower(models.Model):
                 return "The mafia have failed to slaughter the weak on %s." % self.target
         elif self.power == MafiaPower.FRAME_A_TOWNSPERSON:
             return "The mafia frame %s for the death of %s." % (self.target, Player.objects.get(id=self.other_info))
+        elif self.power == MafiaPower.STALK:
+            return "The mafia choose to stalk %s tomorrow." % self.target
         elif self.power == MafiaPower.PLANT_EVIDENCE:
             return "Mafia have planted evidence on %s as %s%s" % (
                 (self.target, "Conscripted " if self.other_info < 0 else "",
@@ -1532,6 +1551,23 @@ class ConspiracyList(models.Model):
     backup2 = models.ForeignKey(Player, related_name='conspiracies_backup2', null=True)
     backup3 = models.ForeignKey(Player, related_name='conspiracies_backup3', null=True)
 
+class SaintList(models.Model):
+    owner = models.ForeignKey(Player)
+    conspired = models.ManyToManyField(Player, related_name='saints')
+    day = models.IntegerField()
+    drop = models.ForeignKey(Player, related_name='saints_drop', null=True)
+    backup1 = models.ForeignKey(Player, related_name='saints_backup1', null=True)
+    backup2 = models.ForeignKey(Player, related_name='saints_backup2', null=True)
+    backup3 = models.ForeignKey(Player, related_name='saints_backup3', null=True)
+
+class SinnerList(models.Model):
+    owner = models.ForeignKey(Player)
+    conspired = models.ManyToManyField(Player, related_name='sinners')
+    day = models.IntegerField()
+    drop = models.ForeignKey(Player, related_name='sinners_drop', null=True)
+    backup1 = models.ForeignKey(Player, related_name='sinners_backup1', null=True)
+    backup2 = models.ForeignKey(Player, related_name='sinners_backup2', null=True)
+    backup3 = models.ForeignKey(Player, related_name='sinners_backup3', null=True)
 
 class CynicList(models.Model):
     owner = models.ForeignKey(Player)
@@ -1544,7 +1580,6 @@ class CynicList(models.Model):
 
     def cynicism_successful(self):
         """
-
         :return: whether this cynic's cynicism worked yesterday
         """
         for cynee in list(self.cynicized.all()):
