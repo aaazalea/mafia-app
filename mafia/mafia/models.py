@@ -879,6 +879,8 @@ class Player(models.Model):
 
         if self.can_investigate():
             links.append((reverse('forms:investigation'), "Make an investigation"))
+        if self.role == Role.objects.get(name="Group Investigator"):
+            links.append((reverse('forms:group_investigation'), "Make a group investigation"))
         if self.role == Role.objects.get(name="Desperado"):
             if self.role_information == Player.DESPERADO_INACTIVE:
                 links.append((reverse('go_desperado'), "Go desperado"))
