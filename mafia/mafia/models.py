@@ -1095,6 +1095,10 @@ class Death(models.Model):
                             mafia_can_see=True)
                         self.made_by_don = False
                         self.murderer.save()
+                        
+                #note: if kabooms are included need to decide whether stalking should not work on kaboomers and if so fix this
+                for stalking in StalkTarget.objects.filter(day=self.murderer.game.current_day, target=self.murderer):
+                    stalking.owner.log(message="While you were stalking them, %s killed %s." % (self.murderer, self.murderee))
 
                 if CLUES_IN_USE:
                     if MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
@@ -1549,9 +1553,9 @@ class MafiaPower(models.Model):
             return "The mafia have elected %s as their don." % self.target
 
 
-class StalkTargetList(models.Model):
-    stalker  = models.ForeignKey(Player)
-    targets = models.ManyToManyField(Player, related_name='stalk_targets')
+class StalkTarget(models.Model):
+    owner  = models.ForeignKey(Player)
+    target = models.ForeignKey(Player, related_name='stalk_target')
     day = models.IntegerField()
 
 class ConspiracyList(models.Model):
