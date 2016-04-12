@@ -229,27 +229,21 @@ def stalk_target_form(request):
         if player.role != Role.objects.get(name__iexact="Stalker"):
             messages.warning(request, "You're not a stalker!")
             return HttpResponseRedirect("/")
-        target_list_object = StalkTargetList.objects.get_or_create(owner=player)[0]
-        target_list = target_list_object.targets
+        stalking = StalkTarget.objects.get_or_create(owner=player)[0]
         new_target = form.cleaned_data['target']
-        # check they're not already in list:
-        if new_target in target_list:
+        # check they new target hasn't already been stalked
+        if StalkTarget.objects.filter(owner=player, target=new_target).exists():
             messages.error(request,
                         "You have already stalked this target on a previous day, or are already stalking them tomorrow.")
             return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Stalk Target Form',
                                              'url': reverse('forms:stalk_target')})
         # if we've already updated today, day=today so we just overwrite first entry; otherwise we put on front of list
         today = player.game.current_day
-        if target_list_object.day = today:
-            target_list[0] = new_target
-            player.log("%s has changed stalk target for day %d to %s" % (player, today + 1, new_target))
-        else:
-            target_list.insert(0, new_target)
-            player.log("%s has set stalk target for day %d to %s" % (player, today + 1, new_target))
-        target_list_object.day = today
-        target_list_object.targets = target_list
-        target_list_object.save()
-        messages.success(request, "Set stalking settings for day %d successfully" % (today + 1))
+        stalking.day = today + 1
+        stalking.target = new_target
+        stalking.save()
+        player.log("%s will stalk %s on day %d." % (player, new_target, today + 1))
+        messages.success(request, "Set stalking settings for day %d successfully." % (today + 1))
         return HttpResponseRedirect('/')
     else:
         return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Stalk Target Form',
