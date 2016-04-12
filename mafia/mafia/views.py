@@ -378,7 +378,7 @@ def investigation_form(request):
                 else:
                     messages.add_message(request, messages.ERROR, "You can't use that kind of investigation.")
         else:
-            messages.add_message(request, messages.ERROR, "Invalid investigation.Please try again.")
+            messages.add_message(request, messages.ERROR, "Invalid investigation. Please try again.")
     if Player.objects.get(user=request.user, game__active=True).is_alive():
         form = InvestigationForm()
 
