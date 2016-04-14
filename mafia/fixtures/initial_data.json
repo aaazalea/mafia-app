@@ -12,7 +12,7 @@
         "fields": {
             "evil_by_default": false,
             "name": "Rogue",
-            "description": "The rogue wants the mafia to win. Unfortunately, they don\u2019t know who the mafia are. The rogue may attempt to kill any player by tapping them on the shoulder and saying \u201cBANG\u201d. If the kill succeeds, or if the rogue was disarmed, then they can\u2019t make another kill until three days later. The rogue may not try to kill the same person twice on the same day.\r\n\r\nAdditionally, the rogue can destroy evidence as if they were a member of the mafia"
+            "description": "The serial killers want the mafia to win. Unfortunately, they don't know who the mafia are. The serial killer may attempt to kill any player by tapping them on the shoulder and saying \"BANG\". If the kill succeeds, or if the serial killer was disarmed, then they can't make another kill until three days later (for example, if you make a kill at any time on Thursday, you cannot make a kill again until after day end on Saturday). The same serial killer may not try to kill the same person twice on the same day.\r\nThe mafia are allowed to give anyone they want mafia den access, but they should be wary that some players might pretend to be serial killers to gain information on the mafia.\r\nA serial killer has 3 free no-kill days. Every day that they could make a kill but do not, they lose one of these no-kill days. If they fail to make a kill when they could have, and have already used up all their no-kill days, they die of bloodlust. For example, if they make kills on days 1, 4, 7, they have not used up any of these three days; if they make kills on days 2 and 6 they will die at the end of day 10, having used their no-kill days on days 1, 5, and 9.\r\nIf the serial killer tries to kill someone and fails because the target was immune, they can make another kill the same day, but they cannot try to kill the same person again on the same day (this is separate from the mafia's restriction). They cannot make another kill that day if they were disarmed.\r\nIf a serial killer visits a kill site (of a kill made by someone other than themself) before at least 3 investigators have visited that kill site, the serial killer may make one investigation about the kill. This allows them to find the mafia more easily. Any role that visits a kill site in order to gain investigative powers counts toward those 3 investigators.\r\n"
         },
         "model": "mafia.role",
         "pk": 2
@@ -48,7 +48,7 @@
         "fields": {
             "evil_by_default": false,
             "name": "Gay Knight",
-            "description": "At the start of game, each Gay Knight will know the identity of their partner, who is also a Gay Knight. If a Gay Knight dies, then their partner will die at the end of the following day (If the mafia a Gay Knight at 6 PM Tuesday, their partner will die at 11 PM Wednesday). Twice per game, if a Gay Knight\u2019s partner is dead, they may guess their partner\u2019s killer (Note: They don\u2019t gather clues and are immune to mafia powers that trick investigators). If they guess correctly, then they are allowed to attempt one kill on their partner\u2019s killer by tapping them on the shoulder and saying \u201cBANG.\u201d Additionally, if a Gay Knight guesses correctly, they may respond to anyone who tries to use \u201cBANG\u201d on them by saying \u201cI do not die\u201d (You have 10 seconds to say this).\r\n"
+            "description": "At the start of game, each Gay Knight will know the identity of their partner, who is also a Gay Knight. If a Gay Knight dies, then their partner will die at the end of the following day (For example, if the mafia kill a Gay Knight at 6 PM Tuesday, their partner will die at 11 PM Wednesday). Twice per game, if a Gay Knight's partner is dead, they may guess their partner's killer (Note: They are immune to mafia powers that trick investigators). If they guess correctly, then they are allowed to kill their partner's killer by tapping them on the shoulder and saying 'BANG.' Additionally, if a Gay Knight guesses correctly, they may respond to anyone who tries to kill them by saying 'I do not die' (You have 10 seconds to say this)."
         },
         "model": "mafia.role",
         "pk": 7
@@ -57,7 +57,7 @@
         "fields": {
             "evil_by_default": false,
             "name": "Investigator",
-            "description": "Whenever a kill is made, a number of clues spawn equal to the number of mafia (including conscripts), plus the number of rogues, plus one. An investigator may visit a kill location to study all clues at that kill location. God will inform him how many clues he finds. After studying a kill location, an investigator must wait an hour before studying the same kill location. Studying the same location multiple times does not grant more investigations.\r\n\r\nOnce per day, an investigator may ask god a question of the form \u201cDid X kill Y?\u201d A single investigator can only make as many total investigations of a player\u2019s death as he found clues at that player\u2019s murder location."
+            "description": "Once per day, an investigator may ask the Mods a question of the form 'Did X kill Y?' A single investigator can only ever ask one question about Y's death; in future investigations they must ask about other deaths. (Police officers who are also investigators have a possible exception.)\r\nAn investigator cannot investigate the death of a player unless they have visited the kill scene (and have informed Mods that they did so). Investigators are encouraged to visit the death location promptly to prevent serial killers from gaining an investigation (see below).\r\n"
         },
         "model": "mafia.role",
         "pk": 8
@@ -91,6 +91,33 @@
     },
     {
         "fields": {
+            "evil_by_default": false,
+            "name": "Priest",
+            "description":"Each day, the priest can designate up to 20% of the number of players (rounding up) as sinners, and up to 20% as saints. Mods will assume the list is unchanged unless told otherwise, and will remove the last player on the list at the end of day if the previous list has become larger than 20% of game. No player can be on both their sinner list and their saint list.\nIf a sinner on their list kills a saint on their list, the priest will be notified that the killer was a sinner.\r\nIf a saint kills a sinner, because of their poor judgment the priest will lose their ability to discern between sinners and saints. They lose their powers for the rest of the game and will be notified. Meanwhile, any investigations on this saint for killing this sinner will return a negative result.\r\n"
+        },
+        "model": "mafia.role",
+        "pk": 12
+    },
+    {
+        "fields": {
+            "evil_by_default": false,
+            "name": "Group Investigator",
+            "description": "The group investigator acts the same as a regular investigator, but their investigations ask about whether a set of n people killed X. If any of those n people would have returned positive for killing X in a regular investigation, the group investigator is told 'Yes, someone in that set killed X.' Otherwise they are told No.\r\nThe group investigator cannot make investigations two days in a row. If their most recent investigation was m days ago, they can ask about any set of size at most 1+2+...+m. For example, if a group investigator made an investigation on day 3, then they cannot make an investigation on day 4. They can ask about a set of at most 3 people on day 5, or can ask about a set of at most 6 people on day 6, or 10 people on day 7, or so on until they make an investigation, at which point their set size resets to 0. The group investigator is considered to have made an investigation on day 0, so they cannot make investigations on day 1, and have a maximum set size of 3 on day 2.\r\n"
+        },
+        "model": "mafia.role",
+        "pk": 13
+    },
+    {
+        "fields": {
+            "evil_by_default": false,
+            "name": "Stalker",
+            "description":"The stalker chooses a person to stalk each day. If person X is being stalked by stalker Y, they are informed that they are being stalked, but not told who is stalking them. If person X makes any successful kills while being stalked, their stalker is notified that they made the kill. If stalker Y has ever stalked person X before, they may not do so again, though stalker Z may stalk person X. No manipulation abilities will prevent the stalker from learning if their target makes a kill. Mafia have an ability that allows them to simulate the stalker role.\r\n"
+        },
+        "model": "mafia.role",
+        "pk": 14
+    },
+    {
+        "fields": {
             "username": "admin",
             "first_name": "",
             "last_name": "",
@@ -110,7 +137,7 @@
     {
         "fields": {
             "name": "Mayor",
-            "description": "The mayor’s vote counts as three votes. Twice per game, the mayor may ask god how many mafia there are (including conscript, but not including rogues). Once per day, if the mayor hasn’t on the previous day, they may make a single investigation as if they were an investigator, except that they don’t need to study clues."
+            "description": "The mayor's vote counts as three votes.\r\nTwice per game, the mayor may ask the Mods how many mafia there are (including conscript, but not including serial killers). No mayor may use more than one count the mafia during their regime.\r\nOnce per day, they may make a single investigation by asking the Mods 'Did X kill Y?' They must have visited Y's kill site in order to make this investigation. It counts if they visited the kill site before becoming elected mayor.\r\n"
         },
         "model": "mafia.electedrole",
         "pk": 1
@@ -118,7 +145,7 @@
     {
         "fields": {
             "name": "Police Officer",
-            "description": "At the start of each day, the police officer may designate up to three players to “watch”. If any of these players die on that day, the police officer gains three clues (distinct from all clues at the murder scene) for that player’s death. Once per day, the police officer may make an investigation, as if they were an investigator. You may make other investigations on the same day if you have a role power that allows you to do so. You may share clues between your police officer power and your role power. Whenever the police officer would use “BANG” on someone, they may always choose to use “KABOOM” instead. If a police officer uses “KABOOM” on someone, all that person’s items are destroyed (instead of given to the police officer)."
+            "description": "Each day, the police officer may designate up to three players to 'watch' the next day. The police officer gets one investigation per day (in addition to whatever investigative role powers they may have). They can use it on any person that died while on their watch list, even if they have previously investigated that death.\r\nA police officer must visit a persons death scene and message the Mods that they did so before they can make any investigations on that person's death.\r\n"
         },
         "model": "mafia.electedrole",
         "pk": 2
@@ -126,7 +153,7 @@
     {
         "fields": {
             "name": "Don",
-            "description": "Whenever a mafia (not rogues) is elected mayor, they automatically become the Don. When the Don makes a kill, the victim’s microphone does not work. Additionally, the Don comes up negative if an investigator tries to investigate them for any kill. If two consecutive mafia kills are made by the Don, then the mafia loses the Don powers (though if they are impeached then reelected, they can become Don again). Even if a mafia is no longer Don, they still come up negative on all kills they made before they lost their Don powers."
+            "description": "Whenever a mafia (not rogues) is elected mayor, they automatically become the Don. When the Don makes a kill, the victim’s microphone does not work. Additionally, the Don comes up negative if an investigator tries to investigate them for any kill. If two consecutive mafia kills are made by the Don, then the mafia loses the Don powers (though if they are impeached then reelected, they can become Don again). Even if a mafia is no longer Don, they still come up negative on all kills they made before they lost their Don powers.\r\n"
         },
         "model": "mafia.electedrole",
         "pk": 3

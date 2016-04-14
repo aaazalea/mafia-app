@@ -8,7 +8,7 @@
 
 {% block main %}
     {% if player %}
-        {% if player.investigation_set.all %}
+        {% if player.investigation_set.all and player.show_investigations_on_main_page %}
             <p>
             <table class="table table-bordered">
                 <tr>
