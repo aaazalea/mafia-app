@@ -20,13 +20,13 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.sites.shortcuts import get_current_site
 from django.http import HttpResponseRedirect, HttpResponse, HttpResponseNotFound
-from forms import DeathReportForm, InvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
-    ConspiracyListForm, CynicListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
+from forms import DeathReportForm, InvestigationForm, GroupInvestigationForm, KillReportForm, LynchVoteForm, MafiaPowerForm, \
+    ConspiracyListForm, CynicListForm, SaintListForm, SinnerListForm, SignUpForm, InnocentChildRevealForm, SuperheroForm, StalkTargetForm, ElectForm, HitmanSuccessForm, CCTVDeathForm, \
     WatchListForm
 from django.shortcuts import render
 import requests
 from settings import ROGUE_KILL_WAIT, MAYOR_COUNT_MAFIA_TIMES, CLUES_IN_USE
-from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, MafiaPower, Notification, \
+from models import Player, Death, Game, Investigation, LynchVote, Item, Role, ConspiracyList, CynicList, SaintList, SinnerList, StalkTarget, MafiaPower, Notification, \
     SuperheroDay, GayKnightPair, ElectedRole, CluePile
 from django.core.urlresolvers import reverse
 
@@ -224,12 +224,13 @@ def superhero_form(request):
     login_url='/')
 def stalk_target_form(request):
     form = StalkTargetForm(request.POST or None)
+    player = Player.objects.get(game__active=True, user=request.user)
     if form.is_valid():
-        player = Player.objects.get(game__active=True, user=request.user)
         if player.role != Role.objects.get(name__iexact="Stalker"):
             messages.warning(request, "You're not a stalker!")
             return HttpResponseRedirect("/")
-        stalking = StalkTarget.objects.get_or_create(owner=player)[0]
+        today = player.game.current_day
+        stalking = StalkTarget.objects.get_or_create(owner=player, day=today+1)[0]
         new_target = form.cleaned_data['target']
         # check they new target hasn't already been stalked
         if StalkTarget.objects.filter(owner=player, target=new_target).exists():
@@ -238,8 +239,6 @@ def stalk_target_form(request):
             return render(request, 'form.html', {'form': form, 'player': player, 'title': 'Stalk Target Form',
                                              'url': reverse('forms:stalk_target')})
         # if we've already updated today, day=today so we just overwrite first entry; otherwise we put on front of list
-        today = player.game.current_day
-        stalking.day = today + 1
         stalking.target = new_target
         stalking.save()
         player.log("%s will stalk %s on day %d." % (player, new_target, today + 1))
@@ -347,7 +346,7 @@ def investigation_form(request):
         form = InvestigationForm(request.POST)
         if form.is_valid():
             death = form.cleaned_data['death']
-            if player.can_investigate(form.cleaned_data['investigation_type'], death):
+            if player.can_investigate_limit_one(form.cleaned_data['investigation_type'], death):
                 guess = form.cleaned_data['guess']
                 investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
                                                              investigation_type=form.cleaned_data['investigation_type'],
@@ -367,8 +366,10 @@ def investigation_form(request):
                                              guess.user.username, death.murderee.user.username))
                 return HttpResponseRedirect("/")
             else:
-                if player.can_investigate(form.cleaned_data['investigation_type']):
-                    messages.add_message(request, messages.ERROR, "You don't have clues for this death.")
+                if player.can_investigate_limit_one(form.cleaned_data['investigation_type']):
+                    messages.add_message(request, messages.ERROR, "You have already investigated this death, "
+                                                                  "or have not visited the kill site, or "
+                                                                  "have already made an investigation today.")
                 else:
                     messages.add_message(request, messages.ERROR, "You can't use that kind of investigation.")
         else:
@@ -378,6 +379,67 @@ def investigation_form(request):
 
         return render(request, 'form.html', {'form': form, 'player': player, 'title': "Make an Investigation",
                                              'url': reverse('forms:investigation')})
+    else:
+        messages.add_message(request, messages.ERROR, "Dead people can't make investigations.")
+
+    return HttpResponseRedirect("/")
+
+
+@notifier
+@login_required
+def group_investigation_form(request):
+    game = Game.objects.get(active=True)
+    player = Player.objects.get(game=game, user=request.user)
+    if player.role != Role.objects.get(name__iexact="Group Investigator"):
+        messages.warning(request, "You're not a group investigator!")
+        return HttpResponseRedirect("/")
+    if request.method == "POST":
+        form = GroupInvestigationForm(request.POST)
+        if form.is_valid():
+            death = form.cleaned_data['death']
+            if player.can_investigate_limit_one(death):
+                guesses = form.cleaned_data['guesses']
+                #check that we're not investigating too large a set
+                max_investigation_size = player.max_group_investigation_size()
+                investigation_size = len(guesses)
+                if investigation_size > max_investigation_size:
+                    messages.add_message(request, messages.ERROR,
+                                         "You may investigate a set of at most %d people." % max_investigation_size)
+                    form = GroupInvestigationForm()
+                    return render(request, 'form.html',
+                                  {'form': form, 'player': player, 'title': "Make a Group Investigation",
+                                   'url': reverse('forms:group_investigation')})
+                #iterate through the set to see if any return True
+                correct = False
+                for guess in guesses:
+                    investigation = Investigation.objects.create(investigator=player, death=death, guess=guess,
+                                                             investigation_type=Investigation.GROUP_INVESTIGATOR,
+                                                             day=game.current_day)
+                    if investigation.is_correct():
+                        correct = True
+                player.log(message="%s investigates the set %s for the death of %s (answer: %s)" %
+                                   (player, ", ".join([person.user.username for person in guesses]),
+                                    death.murderee, "Correct" if correct else "Wrong"))
+                if correct:
+                    messages.add_message(request, messages.SUCCESS, "Correct. One of <b>%s</b> killed <b>%s</b>."
+                                         % (", ".join([person.user.username for person in guesses]), death.murderee.user.username))
+                else:
+                    messages.add_message(request, messages.WARNING,
+                                         "Your investigation turns up nothing. None of <b>%s</b>"
+                                         " is guilty of killing <b>%s</b>." % (
+                                             ", ".join([person.user.username for person in guesses]), death.murderee.user.username))
+                return HttpResponseRedirect("/")
+            else:
+                messages.add_message(request, messages.ERROR, "You have already investigated this death, "
+                                                                  "or have not visited the kill site, or "
+                                                                  "have already made an investigation today.")
+        else:
+            messages.add_message(request, messages.ERROR, "Invalid investigation. Please try again.")
+    if Player.objects.get(user=request.user, game__active=True).is_alive():
+        form = GroupInvestigationForm()
+
+        return render(request, 'form.html', {'form': form, 'player': player, 'title': "Make a Group Investigation",
+                                             'url': reverse('forms:group_investigation')})
     else:
         messages.add_message(request, messages.ERROR, "Dead people can't make investigations.")
 

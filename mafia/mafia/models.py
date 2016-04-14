@@ -6,9 +6,10 @@ from django.core.urlresolvers import reverse
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models import Q
-from settings import ROGUE_KILL_WAIT, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
+import datetime
+from settings import ROGUE_KILL_WAIT, FREE_NO_KILL_DAYS, DESPERADO_DAYS, GAY_KNIGHT_INVESTIGATIONS, GN_DAYS_LIVE, CLUES_IN_USE, \
     MAYOR_COUNT_MAFIA_TIMES, CONSPIRACY_LIST_SIZE, CONSPIRACY_LIST_SIZE_IS_PERCENT, PRIEST_LIST_SIZE, PRIEST_LIST_SIZE_IS_PERCENT, KABOOMS_REGENERATE, \
-    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, ONE_INVESTIGATION_PER, AUTO_SELF_LYNCH
+    TRAPS_REGENERATE, CYNIC_LIST_SIZE, CYNIC_LIST_SIZE_IS_PERCENT, ONE_INVESTIGATION_PER, AUTO_SELF_VOTE, MAX_ONE_LYNCH
 from django.utils.timezone import now
 
 NO_LYNCH = "No lynch"
@@ -119,7 +120,7 @@ class Game(models.Model):
             choices.sort(key=lambda c: -c[2])
             lynch_value = choices[0][2]
             lynches = tuple(ch[0] for ch in choices if ch[2]==lynch_value)
-            if lynches[0] == NO_LYNCH:
+            if lynches[0] == NO_LYNCH or (MAX_ONE_LYNCH and len(lynches)>1):
                 return [], choices
             return lynches, choices
         else:
@@ -157,6 +158,7 @@ class Player(models.Model):
     role = models.ForeignKey(Role, null=True, blank=True)
     elected_roles = models.ManyToManyField(ElectedRole, blank=True)
     conscripted = models.BooleanField(default=False)
+    priest_powers = models.BooleanField(default=True)
     introduction = models.TextField()
     photo = models.TextField()
 
@@ -169,7 +171,16 @@ class Player(models.Model):
 
     DESPERADO_INACTIVE = -1
     DESPERADO_ACTIVATING = 0
-    # Rogue: first kill day
+
+    def lose_priest_powers(self):
+        self.priest_powers = False
+        self.save()
+
+    def has_priest_powers(self):
+        return self.priest_powers
+
+
+    # Rogue: number of free no-kill days
     # Desperado: number of days since going desperado
     # Gay knight: id of partner (perhaps not since this is implemented separately)
     role_information = models.IntegerField(null=True, blank=True)
@@ -204,8 +215,8 @@ class Player(models.Model):
             return "Partner is %s" % self.gn_partner
         elif self.role == Role.objects.get(name__iexact="Rogue"):
             if not self.cant_rogue_kill():
-                return "Can kill"
-            return "Next kill: day %d" % self.next_rogue_kill_day
+                return "Can kill. %d no-kill days left." % self.role_information
+            return "Next kill: day %d. No kill days left: %d." % (self.next_rogue_kill_day, self.role_information)
         elif self.role == Role.objects.get(name__iexact="desperado"):
             if self.role_information == Player.DESPERADO_ACTIVATING:
                 return "Activating tonight"
@@ -249,6 +260,9 @@ class Player(models.Model):
                 return "Saint list: [%s] \tSinner list: [%s]" % (list1, list2)
             else:
                 return "Priest lists not chosen"
+        elif self.role == Role.objects.get(name__iexact="Group Investigator"):
+            return "Last made an investigation %d days ago, so can investigate a set of size at most %d." % (
+                self.days_without_group_investigation(), self.max_group_investigation_size())
         else:
             # IC, Investigator, group investigator
             return ""
@@ -273,28 +287,47 @@ class Player(models.Model):
     gn_partner = property(get_gn_partner)
     
     def get_today_stalk_target(self):
-        l = StalkTargetList.objects.filter(stalker=self)
+        l = StalkTarget.objects.filter(owner=self, day=self.game.current_day)
         if not l.exists():
             return None
-        return l.all()[0].targets[1]
+        return l.all()[0].target
         
     def get_tomorrow_stalk_target(self):
-        l = StalkTargetList.objects.filter(stalker=self)
+        l = self.stalk_target.filter(day=self.game.current_day + 1)
         if not l.exists():
             return None
-        return l.all()[0].targets[0]
+        return l.all()[0].target
         
     today_stalk_target = property(get_today_stalk_target)
     tomorrow_stalk_target = property(get_tomorrow_stalk_target)
-    
+
+
+    def days_without_group_investigation(self):
+        if self.role != Role.objects.get(name__iexact="Group Investigator"):
+            return 0
+        n = 0
+        today = self.game.current_day
+        while(True):
+            if n == today: #this means no investigations have been made all game
+                return n
+            made_investigation_n_days_ago = Investigation.objects.filter(investigator=self, day=today-n).exists()
+            if made_investigation_n_days_ago:
+                return n
+            n += 1
+
+    def max_group_investigation_size(self):
+        n = self.days_without_group_investigation()
+        if n<2:
+            return 0
+        else:
+            return n*(n+1)/2
     
 
     def cant_rogue_kill(self):
         """
-
         :return: False if the rogue can kill now, otherwise the next kill day
         """
-        first_kill_day = self.role_information
+        first_kill_day = 1
         if self.game.current_day >= first_kill_day:
             if not self.kills.exists():
                 return False
@@ -330,9 +363,10 @@ class Player(models.Model):
             return stalking
         elif self.role == Role.objects.get(name__iexact="rogue"):
             if self.can_make_kills():
-                return "You are currently permitted to make kills."
+                return "You are currently permitted to make kills. %d no-kill days remaining." % self.role_information
             else:
-                return "You are next allowed to kill on <b> day %d</b>." % self.next_rogue_kill_day
+                return "You are next allowed to kill on <b> day %d</b>. " \
+                       "%d no-kill days remaining" % (self.next_rogue_kill_day, self.role_information)
         elif self.role == Role.objects.get(name__iexact="desperado"):
             if self.role_information == Player.DESPERADO_INACTIVE:
                 return "You have not gone desperado yet."
@@ -375,7 +409,7 @@ class Player(models.Model):
                 tomorrow_sinner = tomorrow_sinner[0]
             else:
                 # make a copy of today
-                tomorrow_sinner = SinnerList.objects.get(id=today.id)
+                tomorrow_sinner = SinnerList.objects.get(id=today_sinner.id)
                 tomorrow_sinner.id = None
                 tomorrow_sinner.day += 1
                 tomorrow_sinner.save()
@@ -386,7 +420,7 @@ class Player(models.Model):
                 tomorrow_saint = tomorrow_saint[0]
             else:
                 # make a copy of today
-                tomorrow_saint = SaintList.objects.get(id=today.id)
+                tomorrow_saint = SaintList.objects.get(id=today_saint.id)
                 tomorrow_saint.id = None
                 tomorrow_saint.day += 1
                 tomorrow_saint.save()
@@ -400,10 +434,10 @@ class Player(models.Model):
             sinner_tablify = lambda consp: ''.join(
                 '<td>%s</td>' % d.username for d in
                 consp.sinnered.all()) if consp.sinnered.exists() else "<td>(empty)</td>"
-            return ('<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
+            return ('<table class=\'table\'><tr><th colspan=\'100%%\'>Your sinner list</th></tr>' \
                    '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
                        sinner_tablify(today_sinner), sinner_tablify(tomorrow_sinner)),
-                    '<table class=\'table\'><tr><th colspan=\'100%%\'>Your conspiracy list</th></tr>' \
+                    '<table class=\'table\'><tr><th colspan=\'100%%\'>Your saint list</th></tr>' \
                    '<tr><th>Today</th>%s</tr><tr><th>Tomorrow</th>%s</tr></table>' % (
                        saint_tablify(today_saint), saint_tablify(tomorrow_saint)))
         elif self.role == Role.objects.get(name__iexact='Cynic'):
@@ -447,6 +481,9 @@ class Player(models.Model):
                 return a + "Today: superhero identity (paranoia: %s)." % superhero_day.paranoia
             else:
                 return a + "Today: secret identity."
+        elif self.role == Role.objects.get(name__iexact="Group Investigator"):
+            return "<b>You last made an investigation %d days ago, so you can investigate a set of size at most %d.<b>" % (
+                self.days_without_group_investigation(), self.max_group_investigation_size())
         else:
             return ""
 
@@ -458,6 +495,11 @@ class Player(models.Model):
         return Investigation.objects.filter(investigator=self)
 
     investigations = property(get_investigations)
+
+    def show_investigations_on_main_page(self):
+        return self.role != Role.objects.get(name="Group Investigator")
+
+    show_investigations_on_main_page = property(show_investigations_on_main_page)
 
     in_superhero_identity = property(
         lambda self: self.superheroday_set.filter(day=self.game.current_day).exists() and self.superheroday_set.get(
@@ -531,10 +573,22 @@ class Player(models.Model):
         else:
             return False
 
+    def can_investigate_limit_one(self, kind=None, death=None):
+        # all investigator types except Police Officer are limited to one investigation per death,
+        # and all are limited to one per day
+        if not Investigation.objects.filter(investigator=self, death=death).exists() \
+                or kind == Investigation.POLICE_OFFICER:
+            print "can investigate this person"
+            if not Investigation.objects.filter(investigator=self, investigation_type=kind,
+                                                day=self.game.current_day).exists():
+                return True
+        return False
+
+
     def can_investigate(self, kind=None, death=None):
         if self.elected_roles.filter(name__iexact='mayor').exists() and (kind is None or kind == Investigation.MAYORAL):
             if not Investigation.objects.filter(investigator=self,
-                                                day__gte=self.game.current_day - 1,
+                                                day=self.game.current_day,
                                                 investigation_type=Investigation.MAYORAL).exists():
                 return (not death) or self.has_clues_to_investigate(death.murderee)
         if self.role == Role.objects.get(name__iexact='investigator') and (
@@ -583,16 +637,16 @@ class Player(models.Model):
     def save(self, *args, **kwargs):
         if self.role_information is None:
             if self.role == Role.objects.get(name__iexact='rogue'):
-                self.role_information = random.randint(1, ROGUE_KILL_WAIT + 1)
+                self.role_information = FREE_NO_KILL_DAYS
             if self.role == Role.objects.get(name__iexact='Desperado'):
                 self.role_information = Player.DESPERADO_INACTIVE
         super(Player, self).save(*args, **kwargs)
 
     def can_destroy_clue(self, death=None):
         if ONE_INVESTIGATION_PER:
-            return false
+            return False
         return (self.is_evil() or self.role == Role.objects.get(name__iexact="Rogue")) and (
-            not death or (not self in death.clue_destroyers.all()) and death.total_clues > 0)
+            not death or (self not in death.clue_destroyers.all()) and death.total_clues > 0)
 
     def can_make_kills(self):
         if Item.objects.filter(used__gt=self.game.today_start, type=Item.TASER, target=self).exists():
@@ -630,8 +684,8 @@ class Player(models.Model):
         votes = LynchVote.objects.filter(voter=self, day=day).order_by('-time_made')
         if votes:
             return votes[0]
-        elif AUTO_SELF_VOTE:
-            return self #todo fix this to be a LynchVote object
+        elif AUTO_SELF_VOTE and self.is_alive:
+            return LynchVote.objects.create(voter=self, day=day, lynchee=self, time_made = datetime.datetime.now())
         else:
             return None
 
@@ -646,6 +700,9 @@ class Player(models.Model):
         elif self.role == Role.objects.get(name__iexact="Gay knight"):
             if (not self.gn_partner.alive) and self.gn_partner.death.day + GN_DAYS_LIVE == self.game.current_day:
                 return "Lovesickness (day %d)" % self.game.current_day
+        elif self.role == Role.objects.get(name__iexact="Rogue"):
+            if self.role_information == 0 and not self.cant_rogue_kill():
+                return "Bloodthirst (day %d)" % self.game.current_day
 
         poisons = MafiaPower.objects.filter(power=MafiaPower.POISON, target=self)
         if poisons.exists():
@@ -660,6 +717,9 @@ class Player(models.Model):
         if self.role == Role.objects.get(name__iexact="Desperado"):
             if self.role_information >= Player.DESPERADO_ACTIVATING:
                 self.role_information += 1
+        if self.role == Role.objects.get(name__iexact="Rogue"):
+            if not self.cant_rogue_kill():
+                self.role_information -= 1
         elif self.role == Role.objects.get(name__iexact="Gay knight"):
             if not self.gn_partner.alive:
                 self.notify("Your gay knight partner died yesterday. You MUST attempt to avenge them!")
@@ -671,9 +731,9 @@ class Player(models.Model):
             poison = poisons[0]
             if poison.day_used == self.game.current_day:
                 self.notify("You've been poisoned! You die at day end on day %d" % (poison.day_used + 2))
-        if self.role == Role.objects.get(name="Stalker"):
-            self.today_stalk_target = self.tomorrow_stalk_target
-            self.tomorrow_stalk_target = None
+        for stalking in StalkTarget.objects.filter(day=self.game.current_day + 1, target=self):
+            stalking.owner.log(message="%s is stalking %s today." % (stalking.owner, self))
+            self.notify("You are being stalked today. If you make any kills, your stalker will be notified.")
         if self.role == Role.objects.get(name="Conspiracy Theorist"):
             try:
                 consp_list = self.conspiracylist_set.get(day=self.game.current_day + 1)
@@ -777,7 +837,7 @@ class Player(models.Model):
                 st_list = self.saintlist_set.get(day=self.game.current_day + 1)
             except SaintList.DoesNotExist:
                 today_saint = self.saintlist_set.get_or_create(day=self.game.current_day)[0]
-                tomorrow_saint = SaintList.objects.get(id=today.id)
+                tomorrow_saint = SaintList.objects.get(id=today_saint.id)
                 tomorrow_saint.id = None
                 tomorrow_saint.day += 1
                 tomorrow_saint.save()
@@ -824,7 +884,7 @@ class Player(models.Model):
                 sin_list = self.sinnerlist_set.get(day=self.game.current_day + 1)
             except SinnerList.DoesNotExist:
                 today_sinner = self.sinnerlist_set.get_or_create(day=self.game.current_day)[0]
-                tomorrow_sinner = SinnerList.objects.get(id=today.id)
+                tomorrow_sinner = SinnerList.objects.get(id=today_sinner.id)
                 tomorrow_sinner.id = None
                 tomorrow_sinner.day += 1
                 tomorrow_sinner.save()
@@ -862,7 +922,7 @@ class Player(models.Model):
                         count_dead += 1
 
             if not (sin_list.drop and sin_list.drop.is_alive()):
-                sin_list.drop = sin_list.sainted.first()
+                sin_list.drop = sin_list.sinnered.first()
             (sin_list.backup1, sin_list.backup2, sin_list.backup3) = (backups + [None, None, None])[
                                                                            count_dead:count_dead + 3]
             sin_list.save()
@@ -881,7 +941,7 @@ class Player(models.Model):
             if self.role == Role.objects.get(name="Rogue"):
                 links.append((reverse('rogue_disarmed'), "Report that you were disarmed"))
 
-        if self.can_investigate():
+        if self.can_investigate() and self.role != Role.objects.get(name="Group Investigator"):
             links.append((reverse('forms:investigation'), "Make an investigation"))
         if self.role == Role.objects.get(name="Group Investigator"):
             links.append((reverse('forms:group_investigation'), "Make a group investigation"))
@@ -966,6 +1026,7 @@ class Death(models.Model):
     free = models.BooleanField(default=False)
     day = models.IntegerField()
     made_by_don = models.BooleanField(default=False)
+    saint_killed_sinner = models.BooleanField(default=False)
 
     # Clues stuff
     clue_destroyers = models.ManyToManyField(Player, blank=True, related_name='destroyed')
@@ -1098,7 +1159,32 @@ class Death(models.Model):
                         
                 #note: if kabooms are included need to decide whether stalking should not work on kaboomers and if so fix this
                 for stalking in StalkTarget.objects.filter(day=self.murderer.game.current_day, target=self.murderer):
-                    stalking.owner.log(message="While you were stalking them, %s killed %s." % (self.murderer, self.murderee))
+                    stalking.owner.log(message="While %s was stalking them, %s killed %s." % (stalking.owner, self.murderer, self.murderee))
+                    stalking.owner.notify("While you were stalking them, %s killed %s." % (self.murderer, self.murderee))
+
+                for sinner_list in SinnerList.objects.filter(day=self.murderer.game.current_day):
+                    saint_list = SaintList.objects.filter(day=self.murderer.game.current_day, owner=sinner_list.owner)[0]
+                    if self.murderer in list(sinner_list.sinnered.all()) \
+                            and self.murderee in list(saint_list.sainted.all())\
+                            and sinner_list.owner.has_priest_powers():
+                        sinner_list.owner.notify("Someone from your sinner list killed the saint %s." % self.murderee)
+                        sinner_list.owner.log("Someone from %s's sinner list killed the saint %s." % (sinner_list.owner, self.murderee))
+                        #sinner_list.owner.log(sinner_list.owner.has_priest_powers())
+                    if self.murderee in list(sinner_list.sinnered.all()) \
+                            and self.murderer in list(saint_list.sainted.all()) \
+                            and sinner_list.owner.has_priest_powers():
+                        sinner_list.owner.notify(
+                            "Someone from your saint list killed the sinner %s. Because of your bad"
+                            " judgment, you have permanently lost your priestly powers. Also, the "
+                            "saint who made the kill will investigate false for this kill." % self.murderee)
+                        sinner_list.owner.log(
+                            "Someone from %s's saint list killed the sinner %s. Because of their bad"
+                            " judgment, they have permanently lost their priestly powers. Also, the "
+                            "saint who made the kill will investigate false for this kill." % (sinner_list.owner, self.murderee))
+                        sinner_list.owner.lose_priest_powers()
+                        self.saint_killed_sinner = True
+                        #sinner_list.owner.log(sinner_list.owner.has_priest_powers)
+
 
                 if CLUES_IN_USE:
                     if MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS, target=self.murderee).exists():
@@ -1161,7 +1247,7 @@ class Death(models.Model):
         elif (not CLUES_IN_USE) and MafiaPower.objects.filter(power=MafiaPower.MANIPULATE_THE_PRESS,
                                                               target=self.murderee).exists():
             return False
-        elif self.made_by_don:
+        elif self.made_by_don or self.saint_killed_sinner:
             return False
         return True
 
@@ -1402,7 +1488,6 @@ class MafiaPower(models.Model):
     HIRE_A_HITMAN = 9
     CONSCRIPTION = 10
     ELECT_A_DON = 11
-    STALK = 12
     MAFIA_POWER_TYPE = [
         (KABOOM, "KABOOM!"),
         (SCHEME, "Scheme"),
@@ -1414,8 +1499,7 @@ class MafiaPower(models.Model):
         (MANIPULATE_THE_PRESS, "Manipulate the Press"),
         (HIRE_A_HITMAN, "Hire a Hitman"),
         (CONSCRIPTION, "Conscription"),
-        (ELECT_A_DON, "Elect a Don"),
-        (STALK, "Stalk")
+        (ELECT_A_DON, "Elect a Don")
     ]
 
     target = models.ForeignKey(Player, null=True, related_name="mafiapowers_targeted_set")
@@ -1472,9 +1556,6 @@ class MafiaPower(models.Model):
             return forms.ChoiceField(choices=choices, label="What role would you like to plant evidence for?")
         elif self.power == MafiaPower.SET_A_TRAP:
             return forms.ModelChoiceField(queryset=Role.objects.all(), label="What is your guess for a role?")
-        elif self.power == MafiaPower.STALK:
-            return forms.ModelChoiceField(queryset=Player.objects.filter(game__active=True),
-                                          label="Who do you want to stalk tomorrow?")
         else:
             return False
 
@@ -1501,8 +1582,6 @@ class MafiaPower(models.Model):
         elif self.power == MafiaPower.PLANT_EVIDENCE:
             return "Evidence planted for %s%s" % (
                 ("Conscripted " if self.other_info < 0 else ""), Role.objects.get(id=abs(self.other_info)))
-        elif self.power == MafiaPower.STALK:
-            return "Stalking %s tomorrow" % self.target
         elif self.power == MafiaPower.HIRE_A_HITMAN:
             if self.game.current_day == self.day_used:
                 return "%s hired as a hitman for tomorrow" % self.comment
@@ -1536,8 +1615,6 @@ class MafiaPower(models.Model):
                 return "The mafia have failed to slaughter the weak on %s." % self.target
         elif self.power == MafiaPower.FRAME_A_TOWNSPERSON:
             return "The mafia frame %s for the death of %s." % (self.target, Player.objects.get(id=self.other_info))
-        elif self.power == MafiaPower.STALK:
-            return "The mafia choose to stalk %s tomorrow." % self.target
         elif self.power == MafiaPower.PLANT_EVIDENCE:
             return "Mafia have planted evidence on %s as %s%s" % (
                 (self.target, "Conscripted " if self.other_info < 0 else "",
@@ -1554,8 +1631,8 @@ class MafiaPower(models.Model):
 
 
 class StalkTarget(models.Model):
-    owner  = models.ForeignKey(Player)
-    target = models.ForeignKey(Player, related_name='stalk_target')
+    owner = models.ForeignKey(Player)
+    target = models.ForeignKey(Player, related_name='stalk_target', null=True)
     day = models.IntegerField()
 
 class ConspiracyList(models.Model):
@@ -1569,7 +1646,7 @@ class ConspiracyList(models.Model):
 
 class SaintList(models.Model):
     owner = models.ForeignKey(Player)
-    conspired = models.ManyToManyField(Player, related_name='saints')
+    sainted = models.ManyToManyField(Player, related_name='saints')
     day = models.IntegerField()
     drop = models.ForeignKey(Player, related_name='saints_drop', null=True)
     backup1 = models.ForeignKey(Player, related_name='saints_backup1', null=True)
@@ -1577,8 +1654,8 @@ class SaintList(models.Model):
     backup3 = models.ForeignKey(Player, related_name='saints_backup3', null=True)
 
 class SinnerList(models.Model):
-    owner = models.ForeignKey(Player)
-    conspired = models.ManyToManyField(Player, related_name='sinners')
+    owner = models.ForeignKey(Player)# TODO: rename related_name fields
+    sinnered = models.ManyToManyField(Player, related_name='sinners')
     day = models.IntegerField()
     drop = models.ForeignKey(Player, related_name='sinners_drop', null=True)
     backup1 = models.ForeignKey(Player, related_name='sinners_backup1', null=True)

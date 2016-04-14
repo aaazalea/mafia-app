@@ -64,12 +64,7 @@ class GroupInvestigationForm(forms.Form):
         queryset=Player.objects.filter(game__active=True),
         label="Whom would you like to investigate?"
     )
-    max_investigation_size = 0 #FIXME
-    def clean(self):
-        investigation_size = len(self.cleaned_data['guesses'])
-            if conspiracy_size > max_investigation_size:
-                raise ValidationError("You may investigate a set of at most %d% people.." % max_investigation_size)
-                
+
 class StalkTargetForm(forms.Form):
     target = PlayerModelChoiceField(
         queryset=Player.objects.filter(game__active=True, death=None),
